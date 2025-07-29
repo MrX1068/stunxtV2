@@ -1,138 +1,48 @@
-import React, { createContext, useContext, useEffect, useState } from "react";
-import * as SecureStore from "expo-secure-store";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import React, { useEffect, ReactNode } from "react";
+import { router } from "expo-router";
+import { useAuth } from "@/stores/auth";
 
-interface User {
-  id: string;
-  email: string;
-  username: string;
-  fullName: string;
-  avatar?: string;
-  isVerified: boolean;
+interface AuthProviderProps {
+  children: ReactNode;
 }
 
-interface AuthContextType {
-  user: User | null;
-  isLoading: boolean;
-  isAuthenticated: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  logout: () => Promise<void>;
-  register: (data: RegisterData) => Promise<void>;
-}
+export function AuthProvider({ children }: AuthProviderProps) {
+  const { isAuthenticated, isLoading, user, refreshAuth } = useAuth();
 
-interface RegisterData {
-  email: string;
-  password: string;
-  username: string;
-  fullName: string;
-}
-
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
-
-const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || "http://localhost:3000";
-
-export function AuthProvider({ children }: { children: React.ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const queryClient = useQueryClient();
-
-  // Check for existing token on app start
   useEffect(() => {
-    checkAuthStatus();
+    // Try to refresh auth status on app start
+    const initAuth = async () => {
+      try {
+        await refreshAuth();
+      } catch (error) {
+        // If refresh fails, user is not authenticated - this is fine
+        console.log("Auth refresh failed:", error);
+      }
+    };
+
+    initAuth();
   }, []);
 
-  const checkAuthStatus = async () => {
-    try {
-      const token = await SecureStore.getItemAsync("auth_token");
-      if (token) {
-        // Verify token with backend
-        const response = await fetch(`${API_BASE_URL}/auth/me`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-        
-        if (response.ok) {
-          const userData = await response.json();
-          setUser(userData);
-        } else {
-          // Token is invalid, remove it
-          await SecureStore.deleteItemAsync("auth_token");
+  useEffect(() => {
+    // Handle navigation based on auth state
+    if (!isLoading) {
+      if (isAuthenticated && user) {
+        // User is authenticated, check if they're on auth screens
+        const currentPath = router.pathname || '/';
+        if (currentPath.startsWith('/auth') || currentPath === '/onboarding' || currentPath === '/') {
+          // Redirect to main app
+          router.replace('/(tabs)/home');
+        }
+      } else {
+        // User is not authenticated, check if they're on protected screens
+        const currentPath = router.pathname || '/';
+        if (currentPath.startsWith('/(tabs)') || currentPath.startsWith('/create') || currentPath.startsWith('/settings')) {
+          // Redirect to welcome/auth
+        //   router.replace('/');
         }
       }
-    } catch (error) {
-      console.error("Auth check failed:", error);
-    } finally {
-      setIsLoading(false);
     }
-  };
+  }, [isAuthenticated, isLoading, user]);
 
-  const login = async (email: string, password: string) => {
-    const response = await fetch(`${API_BASE_URL}/auth/login`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ email, password }),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || "Login failed");
-    }
-
-    const { token, user: userData } = await response.json();
-    await SecureStore.setItemAsync("auth_token", token);
-    setUser(userData);
-  };
-
-  const register = async (data: RegisterData) => {
-    const response = await fetch(`${API_BASE_URL}/auth/register`, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(data),
-    });
-
-    if (!response.ok) {
-      const error = await response.json();
-      throw new Error(error.message || "Registration failed");
-    }
-
-    const { token, user: userData } = await response.json();
-    await SecureStore.setItemAsync("auth_token", token);
-    setUser(userData);
-  };
-
-  const logout = async () => {
-    await SecureStore.deleteItemAsync("auth_token");
-    setUser(null);
-    queryClient.clear();
-  };
-
-  const isAuthenticated = !!user;
-
-  return (
-    <AuthContext.Provider
-      value={{
-        user,
-        isLoading,
-        isAuthenticated,
-        login,
-        logout,
-        register,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
-  );
-}
-
-export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error("useAuth must be used within an AuthProvider");
-  }
-  return context;
+  return <>{children}</>;
 }

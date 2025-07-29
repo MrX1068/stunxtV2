@@ -11,11 +11,13 @@ import {
   Delete,
   Param,
   Put,
+  Query,
+  BadRequestException,
   UnauthorizedException,
   ValidationPipe,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth, ApiBody, ApiQuery } from '@nestjs/swagger';
 import { ThrottlerGuard } from '@nestjs/throttler';
 
 import { AuthService, AuthResult, AuthTokens } from './auth.service';
@@ -102,12 +104,40 @@ export class AuthController {
   @ApiOperation({ summary: 'Verify email address with OTP' })
   @ApiResponse({
     status: 200,
-    description: 'Email successfully verified',
+    description: 'Email successfully verified and user logged in',
     schema: {
       type: 'object',
       properties: {
         success: { type: 'boolean' },
         message: { type: 'string' },
+        data: {
+          type: 'object',
+          properties: {
+            user: {
+              type: 'object',
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                email: { type: 'string', format: 'email' },
+                username: { type: 'string' },
+                fullName: { type: 'string' },
+                role: { type: 'string' },
+                isActive: { type: 'boolean' },
+                emailVerified: { type: 'boolean' },
+                createdAt: { type: 'string', format: 'date-time' },
+              },
+            },
+            tokens: {
+              type: 'object',
+              properties: {
+                accessToken: { type: 'string' },
+                refreshToken: { type: 'string' },
+                expiresIn: { type: 'number' },
+                tokenType: { type: 'string' },
+              },
+            },
+            sessionId: { type: 'string', format: 'uuid' },
+          },
+        },
       },
     },
   })
@@ -117,15 +147,12 @@ export class AuthController {
   async verifyEmail(
     @Body(ValidationPipe) verifyEmailDto: VerifyEmailDto,
     @Req() req: Request,
-  ): Promise<{ success: boolean; message: string }> {
+  ): Promise<AuthResult> {
     const ipAddress = this.getClientIp(req);
     const userAgent = req.get('User-Agent') || 'Unknown';
 
     const result = await this.authService.verifyEmail(verifyEmailDto, ipAddress, userAgent);
-    return {
-      success: result.success,
-      message: result.message ?? '',
-    };
+    return result.data;
   }
 
   @Public()
@@ -524,6 +551,66 @@ export class AuthController {
   @ApiOperation({ summary: 'Debug: Get user security info' })
   async getUserDebugInfo(@GetUser() user: any): Promise<any> {
     return this.authService.getUserDebugInfo(user.id);
+  }
+
+  @Public()
+  @Get('check-email')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Check if email is already registered' })
+  @ApiQuery({ name: 'email', type: String, description: 'Email to check' })
+  @ApiResponse({
+    status: 200,
+    description: 'Email availability check result',
+    schema: {
+      type: 'object',
+      properties: {
+        exists: { type: 'boolean' },
+        message: { type: 'string' },
+      },
+    },
+  })
+  async checkEmail(
+    @Query('email') email: string,
+  ): Promise<{ exists: boolean; message: string }> {
+    if (!email) {
+      throw new BadRequestException('Email parameter is required');
+    }
+
+    const exists = await this.authService.checkEmailExists(email);
+    return {
+      exists,
+      message: exists ? 'Email is already registered' : 'Email is available',
+    };
+  }
+
+  @Public()
+  @Get('check-username')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Check if username is already taken' })
+  @ApiQuery({ name: 'username', type: String, description: 'Username to check' })
+  @ApiResponse({
+    status: 200,
+    description: 'Username availability check result',
+    schema: {
+      type: 'object',
+      properties: {
+        exists: { type: 'boolean' },
+        message: { type: 'string' },
+      },
+    },
+  })
+  async checkUsername(
+    @Query('username') username: string,
+  ): Promise<{ exists: boolean; message: string }> {
+    if (!username) {
+      throw new BadRequestException('Username parameter is required');
+    }
+
+    const exists = await this.authService.checkUsernameExists(username);
+    return {
+      exists,
+      message: exists ? 'Username is already taken' : 'Username is available',
+    };
   }
 
   /**

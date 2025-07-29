@@ -14,21 +14,50 @@ import {
   InputField,
 } from '@/components/ui';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useTheme } from '@/providers/ThemeProvider';
+import { useTheme } from '@/providers/ThemeContext';
 import { useCommunities } from '@/stores';
 import type { CreateCommunityData } from '@/stores';
 
-const categories = [
-  { id: 'technology', label: 'Technology', icon: '💻' },
-  { id: 'gaming', label: 'Gaming', icon: '🎮' },
-  { id: 'education', label: 'Education', icon: '📚' },
-  { id: 'art', label: 'Art & Design', icon: '🎨' },
-  { id: 'music', label: 'Music', icon: '🎵' },
-  { id: 'sports', label: 'Sports', icon: '⚽' },
-  { id: 'food', label: 'Food & Cooking', icon: '🍳' },
-  { id: 'travel', label: 'Travel', icon: '✈️' },
-  { id: 'business', label: 'Business', icon: '💼' },
-  { id: 'other', label: 'Other', icon: '📂' },
+const communityTypes = [
+  { 
+    id: 'public' as const, 
+    label: 'Public', 
+    icon: '🌍',
+    description: 'Anyone can discover and join this community'
+  },
+  { 
+    id: 'private' as const, 
+    label: 'Private', 
+    icon: '�',
+    description: 'People must request to join or be invited'
+  },
+  { 
+    id: 'secret' as const, 
+    label: 'Secret', 
+    icon: '🕵️',
+    description: 'Only visible to members, invite-only'
+  },
+];
+
+const interactionTypes = [
+  { 
+    id: 'hybrid' as const, 
+    label: 'Hybrid', 
+    icon: '🔄',
+    description: 'Both posts and real-time chat'
+  },
+  { 
+    id: 'post' as const, 
+    label: 'Posts', 
+    icon: '📝',
+    description: 'Feed-style posts with reactions'
+  },
+  { 
+    id: 'chat' as const, 
+    label: 'Chat', 
+    icon: '�',
+    description: 'Real-time messaging only'
+  },
 ];
 
 export default function CreateCommunityScreen() {
@@ -38,9 +67,8 @@ export default function CreateCommunityScreen() {
   const [formData, setFormData] = useState<CreateCommunityData>({
     name: '',
     description: '',
-    category: '',
-    isPrivate: false,
-    rules: [],
+    type: 'public',
+    interactionType: 'hybrid',
   });
   
   const [validationErrors, setValidationErrors] = useState<Partial<CreateCommunityData>>({});
@@ -52,16 +80,16 @@ export default function CreateCommunityScreen() {
       errors.name = 'Community name is required';
     } else if (formData.name.length < 3) {
       errors.name = 'Community name must be at least 3 characters';
+    } else if (formData.name.length > 100) {
+      errors.name = 'Community name must be less than 100 characters';
     }
 
     if (!formData.description.trim()) {
       errors.description = 'Description is required';
     } else if (formData.description.length < 10) {
       errors.description = 'Description must be at least 10 characters';
-    }
-
-    if (!formData.category) {
-      errors.category = 'Please select a category';
+    } else if (formData.description.length > 500) {
+      errors.description = 'Description must be less than 500 characters';
     }
 
     setValidationErrors(errors);
@@ -73,9 +101,8 @@ export default function CreateCommunityScreen() {
 
     try {
       const community = await createCommunity(formData);
-      router.back();
-      // Navigate to the created community
-      router.push(`/community/${community.id}`);
+      // Navigate to the created community directly, this will replace the current screen
+      router.replace(`/community/${community.id}`);
     } catch (error) {
       console.warn('Failed to create community:', error);
     }
@@ -165,79 +192,75 @@ export default function CreateCommunityScreen() {
             )}
           </VStack>
 
-          {/* Category Selection */}
+          {/* Community Type Selection */}
           <VStack space="sm">
             <Text size="md" className="font-medium text-typography-900">
-              Category *
+              Community Type *
             </Text>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={{ paddingRight: 20 }}
-            >
-              <HStack space="md">
-                {categories.map((category) => (
-                  <Button
-                    key={category.id}
-                    variant={formData.category === category.id ? "solid" : "outline"}
-                    size="sm"
-                    onPress={() => updateFormData('category', category.id)}
-                    className="min-w-[100px]"
-                  >
-                    <VStack space="xs" className="items-center">
-                      <Text size="lg">{category.icon}</Text>
-                      <ButtonText size="xs">{category.label}</ButtonText>
-                    </VStack>
-                  </Button>
-                ))}
-              </HStack>
-            </ScrollView>
-            {validationErrors.category && (
-              <Text size="sm" className="text-error-600">
-                {validationErrors.category}
-              </Text>
-            )}
-          </VStack>
-
-          {/* Privacy Setting */}
-          <VStack space="sm">
-            <Text size="md" className="font-medium text-typography-900">
-              Privacy
+            <Text size="sm" className="text-typography-600 mb-2">
+              Choose who can discover and join your community
             </Text>
             <VStack space="md">
-              <Button
-                variant={!formData.isPrivate ? "solid" : "outline"}
-                onPress={() => updateFormData('isPrivate', false)}
-              >
-                <HStack space="md" className="items-center">
-                  <MaterialIcons name="public" size={20} color={!formData.isPrivate ? "#FFFFFF" : "#6B7280"} />
-                  <VStack className="flex-1">
-                    <ButtonText className={!formData.isPrivate ? "text-white" : "text-typography-600"}>
-                      Public
-                    </ButtonText>
-                    <Text size="sm" className={!formData.isPrivate ? "text-white opacity-80" : "text-typography-500"}>
-                      Anyone can find and join
-                    </Text>
-                  </VStack>
-                </HStack>
-              </Button>
-              
-              <Button
-                variant={formData.isPrivate ? "solid" : "outline"}
-                onPress={() => updateFormData('isPrivate', true)}
-              >
-                <HStack space="md" className="items-center">
-                  <MaterialIcons name="lock" size={20} color={formData.isPrivate ? "#FFFFFF" : "#6B7280"} />
-                  <VStack className="flex-1">
-                    <ButtonText className={formData.isPrivate ? "text-white" : "text-typography-600"}>
-                      Private
-                    </ButtonText>
-                    <Text size="sm" className={formData.isPrivate ? "text-white opacity-80" : "text-typography-500"}>
-                      Invite only
-                    </Text>
-                  </VStack>
-                </HStack>
-              </Button>
+              {communityTypes.map((communityType) => (
+                <Button
+                  key={communityType.id}
+                  variant={formData.type === communityType.id ? "solid" : "outline"}
+                  size="md"
+                  onPress={() => updateFormData('type', communityType.id)}
+                  className="p-4"
+                >
+                  <HStack space="md" className="items-center flex-1">
+                    <Text size="xl">{communityType.icon}</Text>
+                    <VStack className="flex-1 items-start">
+                      <ButtonText size="md" className={formData.type === communityType.id ? "text-white" : "text-typography-700"}>
+                        {communityType.label}
+                      </ButtonText>
+                      <Text 
+                        size="sm" 
+                        className={formData.type === communityType.id ? "text-white opacity-80" : "text-typography-500"}
+                      >
+                        {communityType.description}
+                      </Text>
+                    </VStack>
+                  </HStack>
+                </Button>
+              ))}
+            </VStack>
+          </VStack>
+
+          {/* Interaction Type Selection */}
+          <VStack space="sm">
+            <Text size="md" className="font-medium text-typography-900">
+              Interaction Type
+            </Text>
+            <Text size="sm" className="text-typography-600 mb-2">
+              How do you want members to interact?
+            </Text>
+            <VStack space="md">
+              {interactionTypes.map((interactionType) => (
+                <Button
+                  key={interactionType.id}
+                  variant={formData.interactionType === interactionType.id ? "solid" : "outline"}
+                  size="md"
+                  onPress={() => updateFormData('interactionType', interactionType.id)}
+                  className="p-4"
+                >
+                  <HStack space="md" className="items-center flex-1">
+                    <Text size="xl">{interactionType.icon}</Text>
+                    <VStack className="flex-1 items-start">
+                      <ButtonText size="md" className={formData.interactionType === interactionType.id ? "text-white" : "text-typography-700"}>
+                        {interactionType.label}
+                      </ButtonText>
+                      <Text 
+                        size="sm" 
+                        className={formData.interactionType === interactionType.id ? "text-white opacity-80" : "text-typography-500"}
+                      >
+                        {interactionType.description}
+                      </Text>
+                    </VStack>
+                  </HStack>
+                </Button>
+              ))}
             </VStack>
           </VStack>
 

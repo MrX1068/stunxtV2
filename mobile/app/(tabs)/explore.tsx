@@ -15,7 +15,7 @@ import {
   InputSlot,
   InputIcon,
 } from "@/components/ui";
-import { useTheme } from "@/providers/ThemeProvider";
+import { useTheme } from "@/providers/ThemeContext";
 
 interface TrendingTopic {
   id: string;

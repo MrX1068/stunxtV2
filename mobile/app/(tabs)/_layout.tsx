@@ -1,32 +1,29 @@
 import { Text } from "react-native";
 import { Tabs } from "expo-router";
-import { StatusBar } from "expo-status-bar";
-import { useTheme } from "@/providers/ThemeProvider";
+import { useTheme } from "@/providers/ThemeContext";
 
 export default function TabLayout() {
   const { isDark } = useTheme();
 
   return (
-    <>
-      <StatusBar style={isDark ? "light" : "dark"} />
-      <Tabs
-        screenOptions={{
-          headerShown: false,
-          tabBarStyle: {
-            backgroundColor: isDark ? "#1f1f1f" : "#ffffff",
-            borderTopColor: isDark ? "#374151" : "#e5e7eb",
-            height: 85,
-            paddingBottom: 10,
-            paddingTop: 10,
-          },
-          tabBarActiveTintColor: "#6366f1",
-          tabBarInactiveTintColor: isDark ? "#9ca3af" : "#6b7280",
-          tabBarLabelStyle: {
-            fontSize: 12,
-            fontWeight: "600",
-          },
-        }}
-      >
+    <Tabs
+      screenOptions={{
+        headerShown: false,
+        tabBarStyle: {
+          backgroundColor: isDark ? "#171717" : "#ffffff", // bg-background-0 colors
+          borderTopColor: isDark ? "#404040" : "#e5e7eb",  // border-outline-200 colors
+          height: 85,
+          paddingBottom: 10,
+          paddingTop: 10,
+        },
+        tabBarActiveTintColor: "#6366f1", // primary color
+        tabBarInactiveTintColor: isDark ? "#9ca3af" : "#6b7280", // typography-500 colors
+        tabBarLabelStyle: {
+          fontSize: 12,
+          fontWeight: "600",
+        },
+      }}
+    >
         <Tabs.Screen
           name="home"
           options={{
@@ -73,7 +70,6 @@ export default function TabLayout() {
           }}
         />
       </Tabs>
-    </>
   );
 }
 

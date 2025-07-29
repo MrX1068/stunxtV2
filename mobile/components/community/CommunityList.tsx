@@ -44,12 +44,13 @@ export function CommunityList({
   variant = 'default',
 }: CommunityListProps) {
   const [searchQuery, setSearchQuery] = useState('');
-
-  const filteredCommunities = communities.filter(community =>
-    community.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    community.description.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
+  
+  console.log(communities?.length || 0, "communities count", communities?.slice(0, 1));
+  const filteredCommunities = communities?.filter(community =>
+    community?.name.toLowerCase().includes(searchQuery?.toLowerCase()) ||
+    community?.description.toLowerCase().includes(searchQuery?.toLowerCase())
+  ) || []; // Fallback to empty array if communities is null/undefined
+console.log("filteredCommunities", filteredCommunities)
   const renderHeader = () => (
     <VStack space="md" className="px-6 pb-4">
       <HStack className="justify-between items-center">
@@ -115,7 +116,10 @@ export function CommunityList({
         ListEmptyComponent={renderEmptyState}
         refreshControl={
           onRefresh ? (
-            <RefreshControl refreshing={isLoading} onRefresh={onRefresh} />
+            <RefreshControl 
+              refreshing={Boolean(isLoading)} 
+              onRefresh={onRefresh} 
+            />
           ) : undefined
         }
         showsVerticalScrollIndicator={false}

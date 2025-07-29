@@ -2,7 +2,9 @@ import { useState } from "react";
 import { View, ScrollView, Pressable } from "react-native";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { VStack, HStack, Box, Heading, Text, Button, ButtonText } from "@/components/ui";
+import { useApiStore } from "@/stores/api";
 
 interface Interest {
   id: string;
@@ -33,6 +35,9 @@ const interests: Interest[] = [
 export default function InterestSelectionScreen() {
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const apiStore = useApiStore();
+  const insets = useSafeAreaInsets();
 
   const toggleInterest = (interestId: string) => {
     setSelectedInterests(prev => 
@@ -44,16 +49,25 @@ export default function InterestSelectionScreen() {
 
   const handleContinue = async () => {
     if (selectedInterests.length < 3) {
-      return; // Show error or disable button
+      setError("Please select at least 3 interests");
+      return;
     }
 
     setLoading(true);
+    setError("");
+
     try {
-      // TODO: Save interests to user profile
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
-      router.replace("/"); // Navigate to main app
-    } catch (error) {
-      console.error("Failed to save interests:", error);
+      // Save interests to user preferences
+      await apiStore.put('/users/me/preferences', {
+        interests: selectedInterests,
+        onboardingCompleted: true
+      });
+      
+      // Navigate to main app
+      router.replace("/");
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Failed to save interests";
+      setError(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -62,15 +76,18 @@ export default function InterestSelectionScreen() {
   const canContinue = selectedInterests.length >= 3;
 
   return (
-    <View className="flex-1 bg-background">
+    <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
       <StatusBar style="dark" />
       
       <ScrollView 
         className="flex-1"
-        contentContainerClassName="flex-grow"
+        contentContainerStyle={{ 
+          flexGrow: 1, 
+          paddingBottom: Math.max(insets.bottom, 20) + 50 
+        }}
         showsVerticalScrollIndicator={false}
       >
-        <VStack className="flex-1 px-6 py-12 gap-8">
+        <VStack className="flex-1 px-6 py-8 gap-8">
           {/* Header */}
           <VStack className="items-center gap-4">
             <Heading size="3xl" className="font-bold text-typography-900 text-center">
@@ -131,6 +148,13 @@ export default function InterestSelectionScreen() {
 
           {/* Continue Button */}
           <VStack className="gap-4">
+            {/* Error Message */}
+            {error ? (
+              <Box className="bg-error-50 border border-error-200 rounded-lg p-3">
+                <Text className="text-error-600 text-center">{error}</Text>
+              </Box>
+            ) : null}
+
             <Button
               size="lg"
               className="w-full"
@@ -142,7 +166,7 @@ export default function InterestSelectionScreen() {
               </ButtonText>
             </Button>
 
-            {!canContinue && (
+            {!canContinue && !error && (
               <Text className="text-typography-500 text-center">
                 Please select at least 3 interests to continue
               </Text>

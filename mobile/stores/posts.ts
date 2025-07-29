@@ -37,22 +37,34 @@ export interface Community {
   name: string;
   description: string;
   slug: string;
-  avatar?: string;
-  banner?: string;
+  avatarUrl?: string;
+  coverImageUrl?: string;
+  type: 'public' | 'private' | 'secret';
+  interactionType: 'post' | 'chat' | 'hybrid';
+  status: 'active' | 'inactive' | 'suspended' | 'archived';
+  joinRequirement: 'open' | 'approval_required' | 'invite_only';
+  verificationStatus: 'unverified' | 'pending' | 'verified' | 'partner';
+  ownerId: string;
   memberCount: number;
-  postCount: number;
   spaceCount: number;
-  isJoined: boolean;
-  isPrivate: boolean;
-  isOwner: boolean;
-  category: string;
-  tags: string[];
-  rules?: string[];
-  settings: {
-    allowMemberInvites: boolean;
-    requireApproval: boolean;
-    allowFileUploads: boolean;
-  };
+  messageCount: number;
+  activeMembersToday: number;
+  isFeatured: boolean;
+  isTrending: boolean;
+  isPlatformVerified: boolean;
+  allowInvites: boolean;
+  allowMemberInvites: boolean;
+  allowSpaceCreation: boolean;
+  maxMembers?: number;
+  website?: string;
+  discordUrl?: string;
+  twitterHandle?: string;
+  githubOrg?: string;
+  keywords: string[];
+  // Virtual fields that may be added by the API
+  isJoined?: boolean;
+  isOwner?: boolean;
+  memberRole?: 'owner' | 'admin' | 'moderator' | 'member';
   createdAt: string;
   updatedAt: string;
 }
@@ -62,18 +74,30 @@ export interface Space {
   name: string;
   description?: string;
   communityId: string;
-  communityName: string;
-  type: 'text' | 'voice' | 'video' | 'announcement';
+  ownerId: string;
+  type: 'public' | 'private' | 'secret';
+  interactionType: 'post' | 'chat' | 'forum' | 'feed';
+  status: 'active' | 'archived' | 'suspended' | 'deleted';
+  category: 'general' | 'announcements' | 'discussion' | 'projects' | 'support' | 'social' | 'gaming' | 'tech' | 'creative' | 'education' | 'business' | 'entertainment' | 'sports' | 'news' | 'other';
+  avatarUrl?: string;
+  bannerUrl?: string;
+  allowInvites: boolean;
+  allowMemberInvites: boolean;
+  requireApproval: boolean;
+  maxMembers: number;
+  memberCount: number;
+  messageCount: number;
   lastMessage?: {
     id: string;
     content: string;
     authorName: string;
-    timestamp: string;
+    createdAt: string;
   };
-  unreadCount: number;
-  isPrivate: boolean;
-  participants?: number;
   position: number;
+  // Virtual fields
+  unreadCount?: number;
+  isJoined?: boolean;
+  memberRole?: 'owner' | 'admin' | 'moderator' | 'member';
   createdAt: string;
   updatedAt: string;
 }
@@ -81,19 +105,23 @@ export interface Space {
 export interface CreateCommunityData {
   name: string;
   description: string;
-  category: string;
-  isPrivate: boolean;
-  avatar?: string;
-  banner?: string;
-  rules?: string[];
+  type: 'public' | 'private' | 'secret';
+  interactionType?: 'post' | 'chat' | 'hybrid';
+  avatarUrl?: string;
+  coverImageUrl?: string;
 }
 
 export interface CreateSpaceData {
   name: string;
   description?: string;
   communityId: string;
-  type: 'text' | 'voice' | 'video' | 'announcement';
-  isPrivate: boolean;
+  type: 'public' | 'private' | 'secret';
+  category: 'general' | 'announcements' | 'discussion' | 'projects' | 'support' | 'social' | 'gaming' | 'tech' | 'creative' | 'education' | 'business' | 'entertainment' | 'sports' | 'news' | 'other';
+  avatarUrl?: string;
+  bannerUrl?: string;
+  maxMembers?: number;
+  allowMemberInvites?: boolean;
+  requireApproval?: boolean;
 }
 
 export interface CreatePostData {
@@ -405,16 +433,29 @@ export const usePostsStore = create<PostsState>()(
           
           const queryString = params.toString();
           const url = queryString ? `/communities?${queryString}` : '/communities';
-          const response = await apiStore.get<ApiResponse<Community[]>>(url);
+          const response = await apiStore.get<ApiResponse<{ communities: Community[]; total: number }>>(url);
           
-          if (response.success && response.data) {
-            set({ communities: response.data });
+          // Backend returns { success: true, data: { communities: Community[], total: number } }
+          if (response.success && response.data?.communities && Array.isArray(response.data.communities)) {
+            // Get current joined communities to set isJoined flag
+            const currentState = get();
+            const joinedCommunityIds = new Set(currentState.joinedCommunities.map(c => c.id));
+            
+            const communitiesWithJoinStatus = response.data.communities.map(community => ({
+              ...community,
+              isJoined: joinedCommunityIds.has(community.id)
+            }));
+            
+            set({ communities: communitiesWithJoinStatus });
           } else {
-            throw new Error(response.message || 'Failed to fetch communities');
+            // Fallback if response structure is different
+            set({ communities: [] });
+            console.warn('Unexpected communities response structure:', response);
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to fetch communities';
           set({ communitiesError: message });
+          set({ communities: [] }); // Ensure communities is always an array
         } finally {
           set({ isLoadingCommunities: false });
         }
@@ -425,16 +466,37 @@ export const usePostsStore = create<PostsState>()(
           set({ isLoadingCommunities: true, communitiesError: null });
           
           const apiStore = useApiStore.getState();
-          const response = await apiStore.get<ApiResponse<Community[]>>('/communities/joined');
+          const response = await apiStore.get<ApiResponse<{ communities: Community[]; total: number; page: number; limit: number }>>('/communities/me/joined');
           
-          if (response.success && response.data) {
-            set({ joinedCommunities: response.data });
+          // Backend returns { success: true, data: { communities: Community[], total, page, limit } }
+          if (response.success && response.data?.communities && Array.isArray(response.data.communities)) {
+            const joinedCommunitiesWithStatus = response.data.communities.map(community => ({
+              ...community,
+              isJoined: true
+            }));
+            
+            set(state => {
+              // Update main communities list with joined status
+              const joinedIds = new Set(joinedCommunitiesWithStatus.map(c => c.id));
+              const updatedCommunities = state.communities.map(community => ({
+                ...community,
+                isJoined: joinedIds.has(community.id)
+              }));
+              
+              return {
+                joinedCommunities: joinedCommunitiesWithStatus,
+                communities: updatedCommunities
+              };
+            });
           } else {
-            throw new Error(response.message || 'Failed to fetch joined communities');
+            // Fallback if response structure is different
+            set({ joinedCommunities: [] });
+            console.warn('Unexpected joined communities response structure:', response);
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to fetch joined communities';
           set({ communitiesError: message });
+          set({ joinedCommunities: [] }); // Ensure joinedCommunities is always an array
         } finally {
           set({ isLoadingCommunities: false });
         }
@@ -445,16 +507,20 @@ export const usePostsStore = create<PostsState>()(
           set({ isLoadingCommunities: true, communitiesError: null });
           
           const apiStore = useApiStore.getState();
-          const response = await apiStore.get<ApiResponse<Community[]>>('/communities/owned');
+          const response = await apiStore.get<ApiResponse<{ communities: Community[]; total: number; page: number; limit: number }>>('/communities/me/owned');
           
-          if (response.success && response.data) {
-            set({ ownedCommunities: response.data });
+          // Backend returns { success: true, data: { communities: Community[], total, page, limit } }
+          if (response.success && response.data?.communities && Array.isArray(response.data.communities)) {
+            set({ ownedCommunities: response.data.communities });
           } else {
-            throw new Error(response.message || 'Failed to fetch owned communities');
+            // Fallback if response structure is different
+            set({ ownedCommunities: [] });
+            console.warn('Unexpected owned communities response structure:', response);
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to fetch owned communities';
           set({ communitiesError: message });
+          set({ ownedCommunities: [] }); // Ensure ownedCommunities is always an array
         } finally {
           set({ isLoadingCommunities: false });
         }
@@ -786,7 +852,7 @@ export const usePostsStore = create<PostsState>()(
             set(state => ({
               spaces: state.spaces.map(space => 
                 space.id === id 
-                  ? { ...space, participants: (space.participants || 0) + 1 }
+                  ? { ...space, memberCount: (space.memberCount || 0) + 1 }
                   : space
               ),
               communitySpaces: Object.fromEntries(
@@ -794,7 +860,7 @@ export const usePostsStore = create<PostsState>()(
                   communityId,
                   spaces.map(space => 
                     space.id === id 
-                      ? { ...space, participants: (space.participants || 0) + 1 }
+                      ? { ...space, memberCount: (space.memberCount || 0) + 1 }
                       : space
                   )
                 ])
@@ -820,7 +886,7 @@ export const usePostsStore = create<PostsState>()(
             set(state => ({
               spaces: state.spaces.map(space => 
                 space.id === id 
-                  ? { ...space, participants: Math.max(0, (space.participants || 0) - 1) }
+                  ? { ...space, memberCount: Math.max(0, (space.memberCount || 0) - 1) }
                   : space
               ),
               communitySpaces: Object.fromEntries(
@@ -828,7 +894,7 @@ export const usePostsStore = create<PostsState>()(
                   communityId,
                   spaces.map(space => 
                     space.id === id 
-                      ? { ...space, participants: Math.max(0, (space.participants || 0) - 1) }
+                      ? { ...space, memberCount: Math.max(0, (space.memberCount || 0) - 1) }
                       : space
                   )
                 ])

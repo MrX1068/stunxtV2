@@ -19,6 +19,8 @@ interface SpaceListProps {
   isLoading?: boolean;
   onRefresh?: () => void;
   onSpacePress?: (space: Space) => void;
+  onJoinSpace?: (spaceId: string) => void;
+  onLeaveSpace?: (spaceId: string) => void;
   onCreateSpace?: () => void;
   title?: string;
   emptyMessage?: string;
@@ -33,6 +35,8 @@ export function SpaceList({
   isLoading = false,
   onRefresh,
   onSpacePress,
+  onJoinSpace,
+  onLeaveSpace,
   onCreateSpace,
   title = "Spaces",
   emptyMessage = "No spaces found",
@@ -45,8 +49,7 @@ export function SpaceList({
 
   const filteredSpaces = spaces.filter(space =>
     space.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    space.description?.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    space.communityName.toLowerCase().includes(searchQuery.toLowerCase())
+    space.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const renderHeader = () => (
@@ -99,6 +102,8 @@ export function SpaceList({
         variant={variant}
         showCommunity={showCommunity}
         onPress={() => onSpacePress?.(item)}
+        onJoinPress={() => onJoinSpace?.(item.id)}
+        onLeavePress={() => onLeaveSpace?.(item.id)}
       />
     </Box>
   );

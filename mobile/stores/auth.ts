@@ -7,23 +7,25 @@ import { useApiStore, ApiResponse as BaseApiResponse } from './api';
 export interface User {
   id: string;
   email: string;
-  fullName: string;
   username: string;
+  fullName: string;
   avatarUrl?: string;
   bio?: string;
   location?: string;
   websiteUrl?: string;
-  role: string;
-  status: string;
+  status: 'active' | 'inactive' | 'suspended' | 'banned';
+  role: 'user' | 'moderator' | 'admin' | 'super_admin';
+  authProvider: 'local' | 'google' | 'facebook' | 'apple';
   emailVerified: boolean;
-  lastActiveAt: string;
-  lastLoginAt: string;
+  lastLoginAt?: string;
+  createdAt: string;
   updatedAt: string;
 }
 
 export interface LoginCredentials {
   email: string;
   password: string;
+  rememberMe?: boolean;
 }
 
 export interface RegisterData {
@@ -90,6 +92,10 @@ interface AuthState {
   logout: () => Promise<void>;
   refreshAuth: () => Promise<void>;
   clearError: () => void;
+  
+  // Email verification actions
+  verifyEmail: (email: string, otp: string) => Promise<void>;
+  resendEmailVerification: (email: string) => Promise<void>;
   
   // Profile actions
   updateProfile: (data: Partial<User>) => Promise<void>;
@@ -230,6 +236,61 @@ export const useAuthStore = create<AuthState>()(
             setLoading(false);
           }
         },
+
+        verifyEmail: async (email: string, otp: string) => {
+          const { setLoading, setError, setUser, setToken } = get();
+          
+          try {
+            setLoading(true);
+            setError(null);
+            
+            const apiStore = useApiStore.getState();
+            const response = await apiStore.post<AuthResult>('/auth/verify-email', {
+              email,
+              otp
+            });
+            
+            // If verification successful, store auth data
+            if (response.user && response.tokens) {
+              setUser(response.user);
+              setToken(response.tokens.accessToken);
+              set({ 
+                refreshToken: response.tokens.refreshToken,
+                isAuthenticated: true 
+              });
+            }
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Email verification failed';
+            setError(message);
+            throw error;
+          } finally {
+            setLoading(false);
+          }
+        },
+
+        resendEmailVerification: async (email: string) => {
+          const { setLoading, setError } = get();
+          
+          try {
+            setLoading(true);
+            setError(null);
+            
+            const apiStore = useApiStore.getState();
+            const response = await apiStore.post<{ success: boolean; message: string }>('/auth/resend-verification', {
+              email
+            });
+            
+            if (!response.success) {
+              throw new Error(response.message || 'Failed to resend verification code');
+            }
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to resend verification code';
+            setError(message);
+            throw error;
+          } finally {
+            setLoading(false);
+          }
+        },
         
         refreshAuth: async () => {
           const { refreshToken, setLoading, setError, setUser, setToken } = get();
@@ -358,6 +419,9 @@ export const useAuth = () => {
     login: authStore.login,
     register: authStore.register,
     logout: authStore.logout,
+    refreshAuth: authStore.refreshAuth,
+    verifyEmail: authStore.verifyEmail,
+    resendEmailVerification: authStore.resendEmailVerification,
     clearError: authStore.clearError,
   };
 };

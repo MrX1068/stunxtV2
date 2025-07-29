@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { View, ScrollView } from "react-native";
-import { StatusBar } from "expo-status-bar";
 import { router } from "expo-router";
 import {
   HStack,
@@ -10,9 +9,9 @@ import {
   ButtonText,
 } from "@/components/ui";
 import { MaterialIcons } from '@expo/vector-icons';
-import { useTheme } from "@/providers/ThemeProvider";
+import { useTheme } from "@/providers/ThemeContext";
 import { useCommunities } from "@/stores";
-import { ThemeToggleButton } from "@/components/ThemeSelector";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { 
   CommunityList,
 } from "@/components/community";
@@ -21,7 +20,7 @@ import type { Community } from "@/stores";
 export default function CommunitiesScreen() {
   const { isDark } = useTheme();
   const [activeTab, setActiveTab] = useState<'discover' | 'joined' | 'owned'>('discover');
-  
+  console.log("isDark", isDark)
   const {
     communities,
     joinedCommunities,
@@ -167,15 +166,13 @@ export default function CommunitiesScreen() {
 
   return (
     <View className="flex-1 bg-background-0">
-      <StatusBar style={isDark ? "light" : "dark"} />
-      
       {/* Header */}
       <Box className="bg-background-0 border-b border-outline-200 pt-12 pb-4 px-6">
         <HStack className="justify-between items-center">
           <Heading size="xl" className="font-bold text-typography-900">
             Communities
           </Heading>
-          <ThemeToggleButton />
+          <ThemeToggle />
         </HStack>
         
         {/* Tab Navigation */}

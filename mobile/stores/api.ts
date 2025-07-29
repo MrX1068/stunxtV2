@@ -167,6 +167,38 @@ export const useApiStore = create<ApiState>()(
             },
           });
           
+          // Handle token expiry with automatic refresh
+          if (response.status === 401 && token) {
+            try {
+              // Try to refresh the token
+              await useAuthStore.getState().refreshTokens();
+              
+              // Retry the original request with new token
+              const newToken = useAuthStore.getState().token;
+              if (newToken) {
+                const retryHeaders = {
+                  ...defaultHeaders,
+                  Authorization: `Bearer ${newToken}`,
+                  ...options.headers,
+                };
+                
+                const retryResponse = await fetch(url, {
+                  ...options,
+                  headers: retryHeaders,
+                });
+                
+                if (retryResponse.ok) {
+                  const data = await retryResponse.json();
+                  return data as T;
+                }
+              }
+            } catch (refreshError) {
+              // If refresh fails, redirect to login
+              console.log('Token refresh failed, redirecting to login');
+              // The auth store will handle logout and navigation
+            }
+          }
+          
           if (!response.ok) {
             const errorText = await response.text();
             let errorMessage = `HTTP ${response.status}: ${response.statusText}`;

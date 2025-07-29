@@ -12,7 +12,7 @@ import {
   ButtonText,
 } from '@/components/ui';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useTheme } from '@/providers/ThemeProvider';
+import { useTheme } from '@/providers/ThemeContext';
 import { useCommunities, useSpaces } from '@/stores';
 import { SpaceList } from '@/components/community';
 import type { Community, Space } from '@/stores';
@@ -31,6 +31,8 @@ export default function CommunityDetailScreen() {
     spaces,
     isLoading: isLoadingSpaces,
     fetchSpacesByCommunity,
+    joinSpace,
+    leaveSpace,
     clearErrors: clearSpacesErrors,
   } = useSpaces();
 
@@ -58,6 +60,22 @@ export default function CommunityDetailScreen() {
     console.log('Opening space:', space.name);
     // TODO: Navigate to space detail screen
     // router.push(`/space/${space.id}`);
+  };
+
+  const handleJoinSpace = async (spaceId: string) => {
+    try {
+      await joinSpace(spaceId);
+    } catch (error) {
+      console.warn('Failed to join space:', error);
+    }
+  };
+
+  const handleLeaveSpace = async (spaceId: string) => {
+    try {
+      await leaveSpace(spaceId);
+    } catch (error) {
+      console.warn('Failed to leave space:', error);
+    }
   };
 
   const handleRefresh = async () => {
@@ -129,12 +147,12 @@ export default function CommunityDetailScreen() {
             </HStack>
             
             <Box className={`px-2 py-1 rounded-full ${
-              community.isPrivate ? 'bg-orange-100' : 'bg-green-100'
+              community.type === 'private' ? 'bg-orange-100' : 'bg-green-100'
             }`}>
               <Text size="xs" className={`font-medium ${
-                community.isPrivate ? 'text-orange-700' : 'text-green-700'
+                community.type === 'private' ? 'text-orange-700' : 'text-green-700'
               }`}>
-                {community.isPrivate ? 'Private' : 'Public'}
+                {community.type === 'private' ? 'Private' : community.type === 'secret' ? 'Secret' : 'Public'}
               </Text>
             </Box>
           </HStack>
@@ -148,6 +166,8 @@ export default function CommunityDetailScreen() {
           isLoading={isLoadingSpaces}
           onRefresh={handleRefresh}
           onSpacePress={handleSpacePress}
+          onJoinSpace={handleJoinSpace}
+          onLeaveSpace={handleLeaveSpace}
           onCreateSpace={canCreateSpace ? handleCreateSpace : undefined}
           title="Spaces in this Community"
           emptyMessage="No spaces in this community yet."

@@ -1,12 +1,14 @@
 import "../global.css";
+import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { StatusBar } from "expo-status-bar";
 import { Stack } from "expo-router";
 import { GluestackUIProvider } from "@/components/ui/gluestack-ui-provider";
-import { ThemeProvider } from "@/providers/ThemeProvider";
+import { ThemeProvider, useTheme } from "@/providers/ThemeContext";
 import { AuthProvider } from "@/providers/AuthProvider";
 import { NotificationProvider } from "@/providers/NotificationProvider";
-import { SafeAreaProvider } from "react-native-safe-area-context";
+import { SafeAreaProvider, SafeAreaView } from "react-native-safe-area-context";
+import { Box } from "@/components/ui";
 
 // Create a client for TanStack Query
 const queryClient = new QueryClient({
@@ -18,21 +20,35 @@ const queryClient = new QueryClient({
   },
 });
 
+// Inner component that uses theme context
+const AppContent = () => {
+  const { colorMode, isDark } = useTheme();
+  
+  return (
+    <SafeAreaProvider>
+      {/* Single StatusBar for the entire app */}
+      <StatusBar style={"dark"} />
+      
+      <GluestackUIProvider mode={colorMode}>
+        {/* Single SafeAreaView with semantic background */}
+        <Box className="flex-1 bg-background-0">
+          <AuthProvider>
+            <NotificationProvider>
+              <RootNavigator />
+            </NotificationProvider>
+          </AuthProvider>
+        </Box>
+      </GluestackUIProvider>
+    </SafeAreaProvider>
+  );
+};
+
 export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
-      <SafeAreaProvider>
-        <ThemeProvider>
-          <GluestackUIProvider>
-            <AuthProvider>
-              <NotificationProvider>
-                <StatusBar style="auto" />
-                <RootNavigator />
-              </NotificationProvider>
-            </AuthProvider>
-          </GluestackUIProvider>
-        </ThemeProvider>
-      </SafeAreaProvider>
+      <ThemeProvider>
+        <AppContent />
+      </ThemeProvider>
     </QueryClientProvider>
   );
 }

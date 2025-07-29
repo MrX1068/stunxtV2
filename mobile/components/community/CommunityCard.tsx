@@ -42,7 +42,7 @@ export function CommunityCard({
       <Box className="bg-background-50 border border-outline-200 rounded-lg p-3 mb-2">
         <HStack space="md" className="items-center">
           <Box className="w-10 h-10 bg-primary-100 rounded-full items-center justify-center">
-            <Text size="lg">{community.avatar || '👥'}</Text>
+            <Text size="lg">{community?.avatarUrl ? '🏛️' : '👥'}</Text>
           </Box>
           
           <VStack className="flex-1">
@@ -50,7 +50,7 @@ export function CommunityCard({
               {community.name}
             </Text>
             <Text size="xs" className="text-typography-500">
-              {formatNumber(community.memberCount)} members
+              {formatNumber(community.memberCount || 0)} members
             </Text>
           </VStack>
           
@@ -77,7 +77,7 @@ export function CommunityCard({
           <HStack space="md" className="items-start">
             <Box className="w-16 h-16 bg-primary-500 rounded-xl items-center justify-center">
               <Text size="2xl" className="text-white">
-                {community.avatar || '⭐'}
+                {community.avatarUrl ? '🏛️' : '⭐'}
               </Text>
             </Box>
             
@@ -95,15 +95,15 @@ export function CommunityCard({
             <HStack space="lg">
               <VStack className="items-center">
                 <Text size="lg" className="font-bold text-primary-700">
-                  {formatNumber(community.memberCount)}
+                  {formatNumber(community.memberCount || 0)}
                 </Text>
                 <Text size="xs" className="text-typography-500">Members</Text>
               </VStack>
               <VStack className="items-center">
                 <Text size="lg" className="font-bold text-primary-700">
-                  {formatNumber(community.postCount)}
+                  {formatNumber(community.messageCount || 0)}
                 </Text>
-                <Text size="xs" className="text-typography-500">Posts</Text>
+                <Text size="xs" className="text-typography-500">Messages</Text>
               </VStack>
             </HStack>
             
@@ -129,15 +129,15 @@ export function CommunityCard({
         <VStack space="md">
           <HStack space="md" className="items-start">
             <Box className="w-12 h-12 bg-primary-100 rounded-lg items-center justify-center">
-              <Text size="xl">{community.avatar || '👥'}</Text>
+              <Text size="xl">{community?.avatarUrl ? '🏛️' : '👥'}</Text>
             </Box>
             
             <VStack className="flex-1">
               <HStack className="justify-between items-start">
                 <Text size="lg" className="font-semibold text-typography-900 flex-1">
-                  {community.name}
+                  {community?.name}
                 </Text>
-                {community.isPrivate && (
+                {community?.type === 'private' && (
                   <MaterialIcons name="lock" size={16} color="#6B7280" />
                 )}
               </HStack>
@@ -153,13 +153,13 @@ export function CommunityCard({
               <HStack space="xs" className="items-center">
                 <MaterialIcons name="people" size={16} color="#6B7280" />
                 <Text size="sm" className="text-typography-500">
-                  {formatNumber(community.memberCount)}
+                  {formatNumber(community?.memberCount || 0)}
                 </Text>
               </HStack>
               <HStack space="xs" className="items-center">
                 <MaterialIcons name="article" size={16} color="#6B7280" />
                 <Text size="sm" className="text-typography-500">
-                  {formatNumber(community.postCount)}
+                  {formatNumber(community.messageCount || 0)}
                 </Text>
               </HStack>
             </HStack>

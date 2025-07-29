@@ -6,6 +6,8 @@ import {
   VStack,
   HStack,
   Text,
+  Button,
+  ButtonText,
 } from '@/components/ui';
 import { formatTime } from '@/utils/formatters';
 import type { Space } from '@/stores';
@@ -13,25 +15,38 @@ import type { Space } from '@/stores';
 interface SpaceCardProps {
   space: Space;
   onPress?: () => void;
+  onJoinPress?: () => void;
+  onLeavePress?: () => void;
   variant?: 'default' | 'compact';
   showCommunity?: boolean;
+  showActions?: boolean;
 }
 
 const spaceIcons = {
-  text: 'tag',
-  voice: 'volume-up',
-  video: 'videocam',
-  announcement: 'campaign',
+  public: 'public',
+  private: 'lock',
+  secret: 'visibility-off',
 } as const;
 
 export function SpaceCard({
   space,
   onPress,
+  onJoinPress,
+  onLeavePress,
   variant = 'default',
   showCommunity = false,
+  showActions = true,
 }: SpaceCardProps) {
   const getSpaceIcon = () => {
-    return spaceIcons[space.type] || 'tag';
+    return spaceIcons[space.type] || 'public';
+  };
+
+  const handleJoinToggle = () => {
+    if (space.isJoined) {
+      onLeavePress?.();
+    } else {
+      onJoinPress?.();
+    }
   };
 
   const renderCompact = () => (
@@ -49,10 +64,10 @@ export function SpaceCard({
               <Text size="md" className="font-medium text-typography-900">
                 {space.name}
               </Text>
-              {space.unreadCount > 0 && (
+              {(space.unreadCount ?? 0) > 0 && (
                 <Box className="bg-error-500 px-2 py-1 rounded-full min-w-[20px] items-center">
                   <Text size="xs" className="text-white font-medium">
-                    {space.unreadCount > 99 ? '99+' : space.unreadCount}
+                    {(space.unreadCount ?? 0) > 99 ? '99+' : space.unreadCount}
                   </Text>
                 </Box>
               )}
@@ -93,23 +108,18 @@ export function SpaceCard({
                       {space.description}
                     </Text>
                   )}
-                  {showCommunity && (
-                    <Text size="xs" className="text-primary-600 mt-1">
-                      {space.communityName}
-                    </Text>
-                  )}
                 </VStack>
                 
                 <VStack className="items-end">
-                  {space.unreadCount > 0 && (
+                  {(space.unreadCount ?? 0) > 0 && (
                     <Box className="bg-error-500 px-2 py-1 rounded-full min-w-[20px] items-center mb-1">
                       <Text size="xs" className="text-white font-medium">
-                        {space.unreadCount > 99 ? '99+' : space.unreadCount}
+                        {(space.unreadCount ?? 0) > 99 ? '99+' : space.unreadCount}
                       </Text>
                     </Box>
                   )}
                   
-                  {space.isPrivate && (
+                  {space.type === 'private' && (
                     <MaterialIcons name="lock" size={16} color="#6B7280" />
                   )}
                 </VStack>
@@ -129,19 +139,31 @@ export function SpaceCard({
                   </Text>
                 </VStack>
                 <Text size="xs" className="text-typography-500">
-                  {formatTime(space.lastMessage.timestamp)}
+                  {formatTime(space.lastMessage.createdAt)}
                 </Text>
               </HStack>
             </Box>
           )}
           
-          {space.type === 'voice' && space.participants && (
+          {space.memberCount > 0 && (
             <HStack space="xs" className="items-center">
               <MaterialIcons name="people" size={16} color="#6B7280" />
               <Text size="sm" className="text-typography-500">
-                {space.participants} active
+                {space.memberCount} member{space.memberCount !== 1 ? 's' : ''}
               </Text>
             </HStack>
+          )}
+
+          {showActions && (
+            <Button
+              variant={space.isJoined ? "outline" : "solid"}
+              size="sm"
+              onPress={handleJoinToggle}
+            >
+              <ButtonText>
+                {space.isJoined ? "Leave" : "Join"}
+              </ButtonText>
+            </Button>
           )}
         </VStack>
       </Box>

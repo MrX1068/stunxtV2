@@ -14,7 +14,7 @@ import {
   InputField,
   InputSlot,
 } from "@/components/ui";
-import { useTheme } from "@/providers/ThemeProvider";
+import { useTheme } from "@/providers/ThemeContext";
 
 interface Message {
   id: string;

@@ -1,6 +1,5 @@
 import { View, ScrollView, RefreshControl, Pressable } from "react-native";
 import { useState } from "react";
-import { StatusBar } from "expo-status-bar";
 import { router } from "expo-router";
 import {
   VStack,
@@ -11,7 +10,7 @@ import {
   Button,
   ButtonText,
 } from "@/components/ui";
-import { useTheme } from "@/providers/ThemeProvider";
+import { useTheme } from "@/providers/ThemeContext";
 
 interface Post {
   id: string;
@@ -224,7 +223,7 @@ export default function HomeScreen() {
 
   return (
     <View className="flex-1 bg-background-0">
-      <StatusBar style={isDark ? "light" : "dark"} />
+      {/* <StatusBar style={isDark ? "light" : "dark"} /> */}
       
       <ScrollView
         className="flex-1"

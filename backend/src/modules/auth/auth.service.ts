@@ -215,7 +215,7 @@ export class AuthService {
     verifyEmailDto: VerifyEmailDto,
     ipAddress: string,
     userAgent: string,
-  ): Promise<StandardApiResponse<void>> {
+  ): Promise<StandardApiResponse<AuthResult>> {
     const { email, otp } = verifyEmailDto;
 
     try {
@@ -229,7 +229,32 @@ export class AuthService {
       }
 
       if (user.emailVerified) {
-        return this.responseService.ok('Email already verified');
+        // If already verified, still generate tokens to log the user in
+        const fullUser = await this.userRepository.findOne({
+          where: { id: user.id },
+        });
+
+        if (!fullUser) {
+          throw new NotFoundException('User not found');
+        }
+
+        // Generate session and tokens
+        const sessionId = await this.userSessionService.createSession(
+          fullUser.id,
+          ipAddress,
+          userAgent,
+        );
+
+        const tokens = await this.generateTokens(fullUser, sessionId);
+
+        return this.responseService.ok(
+          'Email already verified - logged in successfully',
+          {
+            user: this.sanitizeUser(fullUser),
+            tokens,
+            sessionId,
+          }
+        );
       }
 
       if (!user.emailVerificationToken || !user.passwordResetExpires) {
@@ -262,14 +287,26 @@ export class AuthService {
         passwordResetExpires: null,
       });
 
-      // Send welcome email
+      // Get updated user
       const updatedUser = await this.userRepository.findOne({
         where: { id: user.id },
       });
 
-      if (updatedUser) {
-        await this.emailService.sendWelcomeEmail(email, updatedUser.fullName);
+      if (!updatedUser) {
+        throw new NotFoundException('User not found after verification');
       }
+
+      // Send welcome email
+      await this.emailService.sendWelcomeEmail(email, updatedUser.fullName);
+
+      // Generate session and tokens for the newly verified user
+      const sessionId = await this.userSessionService.createSession(
+        updatedUser.id,
+        ipAddress,
+        userAgent,
+      );
+
+      const tokens = await this.generateTokens(updatedUser, sessionId);
 
       // Record successful verification
       await this.loginAttemptService.recordAttempt(
@@ -278,12 +315,19 @@ export class AuthService {
         userAgent,
         AttemptResult.SUCCESS,
         AttemptType.EMAIL_VERIFICATION,
-        { userId: user.id },
+        { userId: updatedUser.id },
       );
 
-      this.logger.log(`Email verified successfully: ${email}`);
+      this.logger.log(`Email verified successfully and user logged in: ${email}`);
 
-      return this.responseService.ok('Email verified successfully');
+      return this.responseService.ok(
+        'Email verified successfully - logged in',
+        {
+          user: this.sanitizeUser(updatedUser),
+          tokens,
+          sessionId,
+        }
+      );
     } catch (error) {
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
         throw error;
@@ -1362,5 +1406,25 @@ export class AuthService {
    */
   async terminateAllOtherSessions(userId: string, currentSessionId: string): Promise<void> {
     await this.userSessionService.invalidateUserSessionsExcept(userId, currentSessionId);
+  }
+
+  /**
+   * Check if email already exists
+   */
+  async checkEmailExists(email: string): Promise<boolean> {
+    const user = await this.userRepository.findOne({ 
+      where: { email: email.toLowerCase() } 
+    });
+    return !!user;
+  }
+
+  /**
+   * Check if username already exists
+   */
+  async checkUsernameExists(username: string): Promise<boolean> {
+    const user = await this.userRepository.findOne({ 
+      where: { username: username.toLowerCase() } 
+    });
+    return !!user;
   }
 }

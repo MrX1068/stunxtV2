@@ -14,35 +14,47 @@ import {
   InputField,
 } from '@/components/ui';
 import { MaterialIcons } from '@expo/vector-icons';
-import { useTheme } from '@/providers/ThemeProvider';
+import { useTheme } from '@/providers/ThemeContext';
 import { useCommunities, useSpaces } from '@/stores';
 import type { CreateSpaceData } from '@/stores';
 
 const spaceTypes = [
   { 
-    id: 'text', 
-    label: 'Text Channel', 
-    icon: 'textsms' as const,
-    description: 'Send messages, images, and files'
+    id: 'public', 
+    label: 'Public Space', 
+    icon: 'public' as const,
+    description: 'Anyone in the community can access'
   },
   { 
-    id: 'voice', 
-    label: 'Voice Channel', 
-    icon: 'mic' as const,
-    description: 'Talk with voice'
+    id: 'private', 
+    label: 'Private Space', 
+    icon: 'lock' as const,
+    description: 'Only invited members can access'
   },
   { 
-    id: 'video', 
-    label: 'Video Channel', 
-    icon: 'videocam' as const,
-    description: 'Video calls and screen sharing'
+    id: 'secret', 
+    label: 'Secret Space', 
+    icon: 'visibility-off' as const,
+    description: 'Hidden from community members'
   },
-  { 
-    id: 'announcement', 
-    label: 'Announcement', 
-    icon: 'campaign' as const,
-    description: 'Important updates only'
-  },
+];
+
+const spaceCategories = [
+  { id: 'general', label: 'General', icon: 'chat' as const },
+  { id: 'announcements', label: 'Announcements', icon: 'campaign' as const },
+  { id: 'discussion', label: 'Discussion', icon: 'forum' as const },
+  { id: 'projects', label: 'Projects', icon: 'work' as const },
+  { id: 'support', label: 'Support', icon: 'help' as const },
+  { id: 'social', label: 'Social', icon: 'people' as const },
+  { id: 'gaming', label: 'Gaming', icon: 'sports-esports' as const },
+  { id: 'tech', label: 'Tech', icon: 'computer' as const },
+  { id: 'creative', label: 'Creative', icon: 'palette' as const },
+  { id: 'education', label: 'Education', icon: 'school' as const },
+  { id: 'business', label: 'Business', icon: 'business' as const },
+  { id: 'entertainment', label: 'Entertainment', icon: 'movie' as const },
+  { id: 'sports', label: 'Sports', icon: 'sports' as const },
+  { id: 'news', label: 'News', icon: 'newspaper' as const },
+  { id: 'other', label: 'Other', icon: 'more-horiz' as const },
 ];
 
 export default function CreateSpaceScreen() {
@@ -57,8 +69,8 @@ export default function CreateSpaceScreen() {
     name: '',
     description: '',
     communityId: communityId || '',
-    type: 'text',
-    isPrivate: false,
+    type: 'public',
+    category: 'general',
   });
   
   const [validationErrors, setValidationErrors] = useState<Partial<CreateSpaceData>>({});
@@ -158,7 +170,7 @@ export default function CreateSpaceScreen() {
                       className="min-w-[120px]"
                     >
                       <VStack space="xs" className="items-center">
-                        <Text size="lg">{community.avatar || '👥'}</Text>
+                        <Text size="lg">{community.avatarUrl ? '🏛️' : '👥'}</Text>
                         <ButtonText size="xs">{community.name}</ButtonText>
                       </VStack>
                     </Button>
@@ -229,6 +241,39 @@ export default function CreateSpaceScreen() {
             )}
           </VStack>
 
+          {/* Space Category */}
+          <VStack space="sm">
+            <Text size="md" className="font-medium text-typography-900">
+              Category
+            </Text>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{ paddingRight: 20 }}
+            >
+              <HStack space="md">
+                {spaceCategories.map((category) => (
+                  <Button
+                    key={category.id}
+                    variant={formData.category === category.id ? "solid" : "outline"}
+                    size="sm"
+                    onPress={() => updateFormData('category', category.id)}
+                    className="min-w-[100px]"
+                  >
+                    <VStack space="xs" className="items-center">
+                      <MaterialIcons 
+                        name={category.icon} 
+                        size={16} 
+                        color={formData.category === category.id ? "#FFFFFF" : "#6B7280"} 
+                      />
+                      <ButtonText size="xs">{category.label}</ButtonText>
+                    </VStack>
+                  </Button>
+                ))}
+              </HStack>
+            </ScrollView>
+          </VStack>
+
           {/* Description (Optional) */}
           <VStack space="sm">
             <Text size="md" className="font-medium text-typography-900">
@@ -253,16 +298,16 @@ export default function CreateSpaceScreen() {
             </Text>
             <VStack space="md">
               <Button
-                variant={!formData.isPrivate ? "solid" : "outline"}
-                onPress={() => updateFormData('isPrivate', false)}
+                variant={formData.type === 'public' ? "solid" : "outline"}
+                onPress={() => updateFormData('type', 'public')}
               >
                 <HStack space="md" className="items-center">
-                  <MaterialIcons name="public" size={20} color={!formData.isPrivate ? "#FFFFFF" : "#6B7280"} />
+                  <MaterialIcons name="public" size={20} color={formData.type === 'public' ? "#FFFFFF" : "#6B7280"} />
                   <VStack className="flex-1">
-                    <ButtonText className={!formData.isPrivate ? "text-white" : "text-typography-600"}>
+                    <ButtonText className={formData.type === 'public' ? "text-white" : "text-typography-600"}>
                       Public
                     </ButtonText>
-                    <Text size="sm" className={!formData.isPrivate ? "text-white opacity-80" : "text-typography-500"}>
+                    <Text size="sm" className={formData.type === 'public' ? "text-white opacity-80" : "text-typography-500"}>
                       All community members can access
                     </Text>
                   </VStack>
@@ -270,17 +315,34 @@ export default function CreateSpaceScreen() {
               </Button>
               
               <Button
-                variant={formData.isPrivate ? "solid" : "outline"}
-                onPress={() => updateFormData('isPrivate', true)}
+                variant={formData.type === 'private' ? "solid" : "outline"}
+                onPress={() => updateFormData('type', 'private')}
               >
                 <HStack space="md" className="items-center">
-                  <MaterialIcons name="lock" size={20} color={formData.isPrivate ? "#FFFFFF" : "#6B7280"} />
+                  <MaterialIcons name="lock" size={20} color={formData.type === 'private' ? "#FFFFFF" : "#6B7280"} />
                   <VStack className="flex-1">
-                    <ButtonText className={formData.isPrivate ? "text-white" : "text-typography-600"}>
+                    <ButtonText className={formData.type === 'private' ? "text-white" : "text-typography-600"}>
                       Private
                     </ButtonText>
-                    <Text size="sm" className={formData.isPrivate ? "text-white opacity-80" : "text-typography-500"}>
+                    <Text size="sm" className={formData.type === 'private' ? "text-white opacity-80" : "text-typography-500"}>
                       Only invited members can access
+                    </Text>
+                  </VStack>
+                </HStack>
+              </Button>
+
+              <Button
+                variant={formData.type === 'secret' ? "solid" : "outline"}
+                onPress={() => updateFormData('type', 'secret')}
+              >
+                <HStack space="md" className="items-center">
+                  <MaterialIcons name="visibility-off" size={20} color={formData.type === 'secret' ? "#FFFFFF" : "#6B7280"} />
+                  <VStack className="flex-1">
+                    <ButtonText className={formData.type === 'secret' ? "text-white" : "text-typography-600"}>
+                      Secret
+                    </ButtonText>
+                    <Text size="sm" className={formData.type === 'secret' ? "text-white opacity-80" : "text-typography-500"}>
+                      Hidden from community members
                     </Text>
                   </VStack>
                 </HStack>

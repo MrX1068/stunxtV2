@@ -1,6 +1,5 @@
 import React from 'react';
 import { View, ScrollView, Pressable } from 'react-native';
-import { StatusBar } from 'expo-status-bar';
 import { router } from 'expo-router';
 import {
   VStack,
@@ -11,9 +10,9 @@ import {
   Button,
   ButtonText,
 } from '@/components/ui';
-import { useTheme } from '@/providers/ThemeProvider';
+import { useTheme } from '@/providers/ThemeContext';
 import { useAuth } from '@/stores';
-import { ThemeSelector, ThemeFAB } from '@/components/ThemeSelector';
+import { ThemeToggle } from '@/components/ThemeToggle';
 
 interface SettingItemProps {
   title: string;
@@ -63,7 +62,7 @@ function SettingItem({
 }
 
 export default function SettingsScreen() {
-  const { isDark } = useTheme();
+  const { isDark, colorMode } = useTheme();
   const { user, logout } = useAuth();
 
   const handleLogout = async () => {
@@ -104,8 +103,6 @@ export default function SettingsScreen() {
 
   return (
     <View className="flex-1 bg-background-0">
-      <StatusBar style={isDark ? "light" : "dark"} />
-      
       {/* Header */}
       <Box className="bg-background-0 border-b border-outline-200 pt-12 pb-4 px-6">
         <Heading size="2xl" className="font-bold text-typography-900">
@@ -128,13 +125,13 @@ export default function SettingsScreen() {
               <HStack space="md" className="items-center">
                 <Box className="w-16 h-16 bg-primary-600 rounded-full items-center justify-center">
                   <Text size="xl" className="font-bold text-white">
-                    {user.firstName.charAt(0)}{user.lastName.charAt(0)}
+                    {user.fullName.split(' ').map(name => name.charAt(0)).join('').substring(0, 2)}
                   </Text>
                 </Box>
                 
                 <VStack className="flex-1">
                   <Text size="lg" className="font-bold text-typography-900">
-                    {user.firstName} {user.lastName}
+                    {user.fullName}
                   </Text>
                   <Text size="sm" className="text-typography-600">
                     {user.email}
@@ -161,7 +158,12 @@ export default function SettingsScreen() {
                 <Text size="sm" className="text-typography-600 mb-2">
                   Choose how the app looks on your device
                 </Text>
-                <ThemeSelector orientation="horizontal" showDescription={false} />
+                <HStack space="md" className="items-center">
+                  <Text size="md" className="text-typography-700">
+                    Theme: {colorMode === 'system' ? 'System' : colorMode === 'dark' ? 'Dark' : 'Light'}
+                  </Text>
+                  <ThemeToggle size="md" />
+                </HStack>
               </VStack>
             </Box>
           </VStack>
@@ -216,9 +218,6 @@ export default function SettingsScreen() {
           </VStack>
         </VStack>
       </ScrollView>
-
-      {/* Theme Toggle FAB */}
-      <ThemeFAB />
     </View>
   );
 }

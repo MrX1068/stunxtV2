@@ -19,29 +19,29 @@ const onboardingSteps = [
     id: 1,
     emoji: "🚀",
     title: "Welcome to StunxtV2",
-    description: "The next generation social platform for professionals and communities",
-    color: "primary",
+    description: "The next generation platform for creating and discovering communities",
+    bgClass: "bg-blue-600",
   },
   {
     id: 2,
-    emoji: "👥",
-    title: "Join Communities",
-    description: "Connect with like-minded people and grow your professional network",
-    color: "secondary",
+    emoji: "🏘️",
+    title: "Create Communities",
+    description: "Build your own communities around your interests and passions",
+    bgClass: "bg-indigo-600",
   },
   {
     id: 3,
     emoji: "💬",
-    title: "Real-time Messaging",
-    description: "Stay connected with instant messaging and live conversations",
-    color: "success",
+    title: "Organize Spaces",
+    description: "Create dedicated spaces for different topics within your communities",
+    bgClass: "bg-emerald-600",
   },
   {
     id: 4,
     emoji: "🌟",
-    title: "Share & Discover",
-    description: "Share your ideas, discover amazing content, and inspire others",
-    color: "info",
+    title: "Connect & Grow",
+    description: "Discover amazing communities and connect with like-minded people",
+    bgClass: "bg-sky-600",
   },
 ];
 
@@ -81,7 +81,7 @@ export default function OnboardingScreen() {
         <VStack className="flex-1 justify-center px-6 gap-8">
           {/* Illustration */}
           <Box className="items-center gap-6">
-            <Box className={`w-32 h-32 bg-${currentData.color} rounded-full items-center justify-center`}>
+            <Box className={`w-32 h-32 ${currentData.bgClass} rounded-full items-center justify-center`}>
               <Text className="text-6xl">{currentData.emoji}</Text>
             </Box>
             
@@ -97,13 +97,13 @@ export default function OnboardingScreen() {
 
           {/* Progress Indicators */}
           <HStack className="justify-center gap-2">
-            {onboardingSteps.map((_, index) => (
-              <Box
+            {onboardingSteps.map((step, index) => (
+              <View
                 key={index}
                 className={`w-3 h-3 rounded-full ${
                   index === currentStep 
-                    ? `bg-${currentData.color}` 
-                    : 'bg-border-300'
+                    ? step.bgClass
+                    : 'bg-gray-300'
                 }`}
               />
             ))}
@@ -113,7 +113,7 @@ export default function OnboardingScreen() {
           <VStack className="gap-4">
             <Button
               size="lg"
-              className={`w-full bg-${currentData.color}`}
+              className={`w-full ${currentData.bgClass}`}
               onPress={nextStep}
             >
               <ButtonText className="font-semibold">

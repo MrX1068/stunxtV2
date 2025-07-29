@@ -11,7 +11,7 @@ import {
   Button,
   ButtonText,
 } from "@/components/ui";
-import { useTheme } from "@/providers/ThemeProvider";
+import { useTheme } from "@/providers/ThemeContext";
 import { useAuth } from "@/providers/AuthProvider";
 
 interface UserStats {

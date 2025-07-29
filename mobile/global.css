@@ -1,12 +1,3 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* Gluestack UI CSS Variables - will be populated by the provider */
-:root {
-  /* Variables will be injected by GluestackUIProvider */
-}
-
-.dark {
-  /* Dark mode variables will be injected by GluestackUIProvider */
-}

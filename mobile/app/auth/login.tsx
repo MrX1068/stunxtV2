@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { View, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { Link, router } from "expo-router";
-import { StatusBar } from "expo-status-bar";
 import {
   Box,
   VStack,
@@ -16,7 +15,7 @@ import {
   ButtonText,
   ButtonSpinner,
 } from "@/components/ui";
-import { useAuth } from "@/stores";
+import { useAuth, useAuthStore } from "@/stores";
 import { MaterialIcons,  } from '@expo/vector-icons';
 
 interface FormData {
@@ -77,27 +76,42 @@ export default function LoginScreen() {
 
     try {
       await login(formData);
-      // Navigate to main app on successful login
-
-      //check what if user not verfied email?
-
-      router.replace("/(tabs)/home");
+      
+      // Check if email is verified after successful login
+      const { user } = useAuthStore.getState();
+      if (user && !user.emailVerified) {
+        // Navigate to OTP verification if email is not verified
+        router.replace(`/auth/otp?email=${encodeURIComponent(formData.email)}`);
+      } else if (user && user.emailVerified) {
+        // Check if user has completed profile setup
+        if (!user.bio && !user.location) {
+          // User hasn't completed profile setup, redirect to profile setup
+          router.replace("/auth/profile-setup");
+        } else {
+          // User has completed setup, go to main app
+          router.replace("/(tabs)/home");
+        }
+      } else {
+        // Navigate to main app on successful login with verified email
+        router.replace("/(tabs)/home");
+      }
     } catch (err) {
       // Error is handled by the store and displayed via the error state
       console.log("Login error:", err);
     }
   };
-
+ 
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       className="flex-1"
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 25}
     >
-      <StatusBar style="auto" />
       <ScrollView
         className="flex-1 bg-background-0"
-        contentContainerStyle={{ flexGrow: 1 }}
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 50 }}
         keyboardShouldPersistTaps="handled"
+        showsVerticalScrollIndicator={false}
       >
         <Box className="flex-1 px-6 py-8">
           <VStack space="xl" className="flex-1 justify-center">

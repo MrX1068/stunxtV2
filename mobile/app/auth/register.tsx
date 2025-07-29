@@ -1,7 +1,6 @@
 import React, { useState } from "react";
-import { ScrollView, KeyboardAvoidingView, Platform } from "react-native";
+import { View, ScrollView, KeyboardAvoidingView, Platform } from "react-native";
 import { Link, router } from "expo-router";
-import { StatusBar } from "expo-status-bar";
 import {
   VStack,
   HStack,
@@ -17,6 +16,7 @@ import {
   InputIcon,
 } from "@/components/ui";
 import { useAuth } from "@/stores";
+import { useApiStore } from "@/stores/api";
 import { MaterialIcons } from '@expo/vector-icons';
 
 interface FormData {
@@ -32,19 +32,49 @@ interface FormData {
 
 export default function RegisterScreen() {
   const { register, isLoading, error, clearError } = useAuth();
+  const apiStore = useApiStore();
   const [formData, setFormData] = useState<FormData>({
     fullName: "",
     username: "",
     email: "",
     password: "",
     confirmPassword: "",
-    bio: "",
-    location: "",
-    websiteUrl: "",
+    // bio: "",
+    // location: "",
+    // websiteUrl: "",
   });
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Partial<FormData>>({});
+  const [checkingDuplicate, setCheckingDuplicate] = useState(false);
+  const [duplicateCheckTimeout, setDuplicateCheckTimeout] = useState<NodeJS.Timeout | null>(null);
+  
+  // Debounced duplicate check function
+  const checkForDuplicates = async (field: 'email' | 'username', value: string) => {
+    if (!value || value.length < 3) return;
+    console.log("starteig ", field, value)
+    
+    try {
+      console.log("check duplivate")
+      const endpoint = field === 'email' ? 'check-email' : 'check-username';
+      const result = await apiStore.get(`/auth/${endpoint}?${field}=${encodeURIComponent(value)}`);
+      console.log("result", result)
+      if (result.success && result?.data?.exists) {
+        setValidationErrors(prev => ({
+          ...prev,
+          [field]: result?.data?.exists.message
+        }));
+      } else {
+        setValidationErrors(prev => {
+          const newErrors = { ...prev };
+          delete newErrors[field];
+          return newErrors;
+        });
+      }
+    } catch (error) {
+      console.warn(`${field} duplicate check failed:`, error);
+    }
+  };
 
   const validateForm = (): boolean => {
     const errors: Partial<FormData> = {};
@@ -79,13 +109,28 @@ export default function RegisterScreen() {
       setValidationErrors(prev => ({ ...prev, [field]: undefined }));
     }
     if (error) clearError();
+    
+    // Debounced duplicate check for email and username
+    if ((field === 'email' || field === 'username') && value.length >= 3) {
+      if (duplicateCheckTimeout) {
+        clearTimeout(duplicateCheckTimeout);
+      }
+      
+      const timeout = setTimeout(() => {
+        checkForDuplicates(field, value);
+      }, 500); // 500ms delay
+      
+      setDuplicateCheckTimeout(timeout);
+    }
   };
 
   const handleSubmit = async () => {
     if (!validateForm()) return;
+    
     try {
       await register(formData);
-      router.replace('/auth/otp-verification');
+      // Navigate to OTP verification with email parameter
+      router.replace(`/auth/otp?email=${encodeURIComponent(formData.email)}`);
     } catch (err) {
       console.log('Registration error:', err);
     }
@@ -95,21 +140,21 @@ export default function RegisterScreen() {
     <KeyboardAvoidingView
       behavior={Platform.OS === "ios" ? "padding" : "height"}
       className="flex-1"
+      keyboardVerticalOffset={Platform.OS === "ios" ? 0 : 25}
     >
-      <StatusBar style="dark" />
       <ScrollView
-        className="flex-1 bg-background"
-        contentContainerClassName="flex-grow"
+        className="flex-1 bg-background-0"
+        contentContainerStyle={{ flexGrow: 1, paddingBottom: 100 }}
         showsVerticalScrollIndicator={false}
         keyboardShouldPersistTaps="handled"
       >
-        <VStack className="flex-1 justify-center px-6 py-12 gap-8">
+        <VStack className="flex-1 justify-center  px-6 py-12 gap-8">
           {/* Header */}
           <Box className="items-center gap-4">
-            <Heading size="3xl" className="font-bold text-primary text-center">
+            <Heading size="3xl" className="font-bold text-typography-900 text-center">
               Create Account
             </Heading>
-            <Text size="lg" className="text-typography-600 text-center max-w-sm">
+            <Text size="lg" className="text-typography-500 text-center max-w-sm">
               Join our community and start connecting
             </Text>
           </Box>
@@ -119,7 +164,7 @@ export default function RegisterScreen() {
             {/* Full Name Input */}
             <VStack className="gap-2">
               <Text className="text-typography-700 font-medium">Full Name</Text>
-              <Input variant="outline" size="lg" className="bg-background">
+              <Input variant="outline" size="lg">
                 <InputField
                   placeholder="Enter your full name"
                   value={formData.fullName}
