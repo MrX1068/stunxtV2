@@ -1,0 +1,537 @@
+import {
+  Controller,
+  Get,
+  Post,
+  Put,
+  Delete,
+  Body,
+  Param,
+  Query,
+  UseGuards,
+  Request,
+  ForbiddenException,
+  ParseUUIDPipe,
+} from '@nestjs/common';
+import {
+  ApiTags,
+  ApiOperation,
+  ApiResponse,
+  ApiBearerAuth,
+  ApiParam,
+  ApiQuery,
+} from '@nestjs/swagger';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { SpaceService } from './space.service';
+import { SpaceMemberService } from './space-member.service';
+import { 
+  CreateSpaceDto, 
+  UpdateSpaceDto, 
+  SpaceQueryDto,
+  JoinSpaceDto,
+  UpdateSpaceMemberRoleDto,
+  BanSpaceMemberDto,
+  TransferSpaceOwnershipDto
+} from './dto/space.dto';
+import { SpaceMemberRole } from '../../shared/entities/space-member.entity';
+
+@ApiTags('Spaces')
+@Controller('communities/:communityId/spaces')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
+export class SpaceController {
+  constructor(
+    private readonly spaceService: SpaceService,
+    private readonly spaceMemberService: SpaceMemberService,
+  ) {}
+
+  @Post()
+  @ApiOperation({ summary: 'Create a new space in community' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiResponse({ status: 201, description: 'Space created successfully' })
+  @ApiResponse({ status: 400, description: 'Bad request' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 409, description: 'Space name already exists' })
+  async createSpace(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Body() createSpaceDto: CreateSpaceDto,
+    @Request() req: any,
+  ) {
+    return this.spaceService.create(createSpaceDto, communityId, req.user.id);
+  }
+
+  @Get()
+  @ApiOperation({ summary: 'Get community spaces' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiResponse({ status: 200, description: 'Spaces retrieved successfully' })
+  async getCommunitySpaces(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Query() query: SpaceQueryDto,
+    @Request() req: any,
+  ) {
+    return this.spaceService.getCommunitySpaces(communityId, req.user.id, {
+      page: query.page,
+      limit: query.limit,
+      includePrivate: true,
+    });
+  }
+
+  @Get('search')
+  @ApiOperation({ summary: 'Search spaces in community' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiQuery({ name: 'q', description: 'Search query' })
+  @ApiResponse({ status: 200, description: 'Search results retrieved successfully' })
+  async searchSpaces(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Query('q') query: string,
+    @Query() options: SpaceQueryDto,
+    @Request() req: any,
+  ) {
+    return this.spaceService.searchSpaces(query, communityId, {
+      page: options.page,
+      limit: options.limit,
+      includePrivate: true,
+      userId: req.user.id,
+    });
+  }
+
+  @Get('popular')
+  @ApiOperation({ summary: 'Get popular spaces in community' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiResponse({ status: 200, description: 'Popular spaces retrieved successfully' })
+  async getPopularSpaces(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Request() req: any,
+    @Query('limit') limit?: number,
+  ) {
+    return this.spaceService.getPopularSpaces(communityId, {
+      limit: limit ? parseInt(limit.toString()) : 10,
+      includePrivate: true,
+      userId: req.user.id,
+    });
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get space by ID' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiParam({ name: 'id', description: 'Space ID' })
+  @ApiResponse({ status: 200, description: 'Space found' })
+  @ApiResponse({ status: 404, description: 'Space not found' })
+  async getSpace(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: any,
+  ) {
+    return this.spaceService.findOne(id, req.user?.id);
+  }
+
+  @Get('name/:name')
+  @ApiOperation({ summary: 'Get space by name' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiParam({ name: 'name', description: 'Space name' })
+  @ApiResponse({ status: 200, description: 'Space found' })
+  @ApiResponse({ status: 404, description: 'Space not found' })
+  async getSpaceByName(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Param('name') name: string,
+    @Request() req: any,
+  ) {
+    return this.spaceService.findByName(communityId, name, req.user?.id);
+  }
+
+  @Put(':id')
+  @ApiOperation({ summary: 'Update space' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiParam({ name: 'id', description: 'Space ID' })
+  @ApiResponse({ status: 200, description: 'Space updated successfully' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Space not found' })
+  async updateSpace(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() updateSpaceDto: UpdateSpaceDto,
+    @Request() req: any,
+  ) {
+    return this.spaceService.update(id, updateSpaceDto, req.user.id);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete space' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiParam({ name: 'id', description: 'Space ID' })
+  @ApiResponse({ status: 200, description: 'Space deleted successfully' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  @ApiResponse({ status: 404, description: 'Space not found' })
+  async deleteSpace(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: any,
+  ) {
+    return this.spaceService.delete(id, req.user.id);
+  }
+
+  // Member Management Endpoints
+  @Get(':id/members')
+  @ApiOperation({ summary: 'Get space members' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiParam({ name: 'id', description: 'Space ID' })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
+  @ApiQuery({ name: 'role', required: false, description: 'Filter by role' })
+  @ApiQuery({ name: 'search', required: false, description: 'Search members' })
+  async getSpaceMembers(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: any,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('role') role?: SpaceMemberRole,
+    @Query('search') search?: string,
+  ) {
+    return this.spaceMemberService.getMembers(id, {
+      page: page ? parseInt(page.toString()) : 1,
+      limit: limit ? parseInt(limit.toString()) : 20,
+      role,
+      search,
+    });
+  }
+
+  @Post(':id/join')
+  @ApiOperation({ summary: 'Join space' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiParam({ name: 'id', description: 'Space ID' })
+  @ApiResponse({ status: 201, description: 'Successfully joined space' })
+  @ApiResponse({ status: 400, description: 'Already a member or other error' })
+  async joinSpace(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() joinDto: JoinSpaceDto,
+    @Request() req: any,
+  ) {
+    return this.spaceMemberService.addMember(id, req.user.id);
+  }
+
+  @Delete(':id/members/:userId')
+  @ApiOperation({ summary: 'Remove member from space' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiParam({ name: 'id', description: 'Space ID' })
+  @ApiParam({ name: 'userId', description: 'User ID to remove' })
+  @ApiResponse({ status: 200, description: 'Member removed successfully' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  async removeMember(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Request() req: any,
+  ) {
+    return this.spaceMemberService.removeMember(id, userId, req.user.id);
+  }
+
+  @Put(':id/members/:userId/role')
+  @ApiOperation({ summary: 'Update member role' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiParam({ name: 'id', description: 'Space ID' })
+  @ApiParam({ name: 'userId', description: 'User ID' })
+  @ApiResponse({ status: 200, description: 'Role updated successfully' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  async updateMemberRole(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() roleDto: UpdateSpaceMemberRoleDto,
+    @Request() req: any,
+  ) {
+    return this.spaceMemberService.updateMemberRole(id, userId, roleDto.role, req.user.id);
+  }
+
+  @Post(':id/members/:userId/ban')
+  @ApiOperation({ summary: 'Ban member from space' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiParam({ name: 'id', description: 'Space ID' })
+  @ApiParam({ name: 'userId', description: 'User ID to ban' })
+  @ApiResponse({ status: 200, description: 'Member banned successfully' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  async banMember(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Body() banDto: BanSpaceMemberDto,
+    @Request() req: any,
+  ) {
+    return this.spaceMemberService.banMember(id, userId, req.user.id, banDto.reason);
+  }
+
+  @Delete(':id/members/:userId/ban')
+  @ApiOperation({ summary: 'Unban member from space' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiParam({ name: 'id', description: 'Space ID' })
+  @ApiParam({ name: 'userId', description: 'User ID to unban' })
+  @ApiResponse({ status: 200, description: 'Member unbanned successfully' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  async unbanMember(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('userId', ParseUUIDPipe) userId: string,
+    @Request() req: any,
+  ) {
+    return this.spaceMemberService.unbanMember(id, userId, req.user.id);
+  }
+
+  @Post(':id/transfer-ownership')
+  @ApiOperation({ summary: 'Transfer space ownership' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiParam({ name: 'id', description: 'Space ID' })
+  @ApiResponse({ status: 200, description: 'Ownership transferred successfully' })
+  @ApiResponse({ status: 403, description: 'Only owner can transfer ownership' })
+  async transferOwnership(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() transferDto: TransferSpaceOwnershipDto,
+    @Request() req: any,
+  ) {
+    // Check if user is the current owner
+    const hasPermission = await this.spaceMemberService.hasSpacePermission(
+      id,
+      req.user.id,
+      SpaceMemberRole.OWNER
+    );
+
+    if (!hasPermission) {
+      throw new ForbiddenException('Only space owner can transfer ownership');
+    }
+
+    return this.spaceMemberService.transferOwnership(id, req.user.id, transferDto.newOwnerId);
+  }
+
+  // Statistics and Analytics Endpoints
+  @Get(':id/stats')
+  @ApiOperation({ summary: 'Get space statistics' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiParam({ name: 'id', description: 'Space ID' })
+  @ApiResponse({ status: 200, description: 'Statistics retrieved successfully' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  async getSpaceStats(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: any,
+  ) {
+    // Check if user has permission to view stats
+    const hasPermission = await this.spaceMemberService.hasSpacePermission(
+      id,
+      req.user.id,
+      SpaceMemberRole.MODERATOR
+    );
+
+    if (!hasPermission) {
+      throw new ForbiddenException('You do not have permission to view statistics');
+    }
+
+    const [spaceStats, memberStats] = await Promise.all([
+      this.spaceService.getSpaceStats(id),
+      this.spaceMemberService.getMemberStats(id),
+    ]);
+
+    return {
+      space: spaceStats,
+      members: memberStats,
+    };
+  }
+
+  @Get(':id/members/banned')
+  @ApiOperation({ summary: 'Get banned members' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiParam({ name: 'id', description: 'Space ID' })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
+  @ApiResponse({ status: 200, description: 'Banned members retrieved successfully' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  async getBannedMembers(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: any,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    // Check if user has permission to view banned members
+    const hasPermission = await this.spaceMemberService.hasSpacePermission(
+      id,
+      req.user.id,
+      SpaceMemberRole.MODERATOR
+    );
+
+    if (!hasPermission) {
+      throw new ForbiddenException('You do not have permission to view banned members');
+    }
+
+    return this.spaceMemberService.getBannedMembers(id, {
+      page: page ? parseInt(page.toString()) : 1,
+      limit: limit ? parseInt(limit.toString()) : 20,
+    });
+  }
+
+  @Get(':id/members/recent')
+  @ApiOperation({ summary: 'Get recent members' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiParam({ name: 'id', description: 'Space ID' })
+  @ApiQuery({ name: 'days', required: false, description: 'Number of days back' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Maximum results' })
+  @ApiResponse({ status: 200, description: 'Recent members retrieved successfully' })
+  async getRecentMembers(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: any,
+    @Query('days') days?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.spaceMemberService.getRecentMembers(
+      id,
+      days ? parseInt(days.toString()) : 7,
+      limit ? parseInt(limit.toString()) : 10
+    );
+  }
+
+  // User's Space Memberships
+  @Get('me/memberships')
+  @ApiOperation({ summary: 'Get user\'s space memberships in community' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
+  @ApiResponse({ status: 200, description: 'Memberships retrieved successfully' })
+  async getUserSpaceMemberships(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Request() req: any,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.spaceMemberService.getUserSpaces(req.user.id, {
+      page: page ? parseInt(page.toString()) : 1,
+      limit: limit ? parseInt(limit.toString()) : 20,
+    });
+  }
+
+  @Get('me/owned')
+  @ApiOperation({ summary: 'Get spaces owned by user in community' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
+  @ApiResponse({ status: 200, description: 'Owned spaces retrieved successfully' })
+  async getUserOwnedSpaces(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Request() req: any,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.spaceService.getUserOwnedSpaces(req.user.id, communityId, {
+      page: page ? parseInt(page.toString()) : 1,
+      limit: limit ? parseInt(limit.toString()) : 20,
+    });
+  }
+
+  @Get('me/joined')
+  @ApiOperation({ summary: 'Get spaces joined by user in community (not owned)' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
+  @ApiResponse({ status: 200, description: 'Joined spaces retrieved successfully' })
+  async getUserJoinedSpaces(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Request() req: any,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.spaceMemberService.getUserJoinedSpaces(req.user.id, communityId, {
+      page: page ? parseInt(page.toString()) : 1,
+      limit: limit ? parseInt(limit.toString()) : 20,
+    });
+  }
+}
+
+// Global Space Controller (not community-specific)
+@ApiTags('Spaces - Global')
+@Controller('spaces')
+@UseGuards(JwtAuthGuard)
+@ApiBearerAuth()
+export class GlobalSpaceController {
+  constructor(
+    private readonly spaceService: SpaceService,
+    private readonly spaceMemberService: SpaceMemberService,
+  ) {}
+
+  @Get('search')
+  @ApiOperation({ summary: 'Search all spaces across communities' })
+  @ApiQuery({ name: 'q', description: 'Search query' })
+  @ApiResponse({ status: 200, description: 'Search results retrieved successfully' })
+  async searchAllSpaces(
+    @Query('q') query: string,
+    @Query() options: SpaceQueryDto,
+    @Request() req: any,
+  ) {
+    return this.spaceService.searchSpaces(query, undefined, {
+      page: options.page,
+      limit: options.limit,
+      includePrivate: false, // Only public spaces in global search
+      userId: req.user.id,
+    });
+  }
+
+  @Get('popular')
+  @ApiOperation({ summary: 'Get popular spaces across all communities' })
+  @ApiResponse({ status: 200, description: 'Popular spaces retrieved successfully' })
+  async getGlobalPopularSpaces(
+    @Request() req: any,
+    @Query('limit') limit?: number,
+  ) {
+    return this.spaceService.getPopularSpaces(undefined, {
+      limit: limit ? parseInt(limit.toString()) : 20,
+      includePrivate: false, // Only public spaces in global view
+      userId: req.user.id,
+    });
+  }
+
+  @Get('me/all')
+  @ApiOperation({ summary: 'Get all user\'s space memberships' })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
+  @ApiResponse({ status: 200, description: 'All memberships retrieved successfully' })
+  async getAllUserSpaces(
+    @Request() req: any,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.spaceMemberService.getUserSpaces(req.user.id, {
+      page: page ? parseInt(page.toString()) : 1,
+      limit: limit ? parseInt(limit.toString()) : 20,
+    });
+  }
+
+  @Get('me/owned')
+  @ApiOperation({ summary: 'Get all spaces owned by user across all communities' })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
+  @ApiResponse({ status: 200, description: 'Owned spaces retrieved successfully' })
+  async getAllOwnedSpaces(
+    @Request() req: any,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.spaceService.getUserOwnedSpaces(req.user.id, undefined, {
+      page: page ? parseInt(page.toString()) : 1,
+      limit: limit ? parseInt(limit.toString()) : 20,
+    });
+  }
+
+  @Get('me/joined')
+  @ApiOperation({ summary: 'Get all spaces joined by user across all communities (not owned)' })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
+  @ApiResponse({ status: 200, description: 'Joined spaces retrieved successfully' })
+  async getAllJoinedSpaces(
+    @Request() req: any,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.spaceMemberService.getUserJoinedSpaces(req.user.id, undefined, {
+      page: page ? parseInt(page.toString()) : 1,
+      limit: limit ? parseInt(limit.toString()) : 20,
+    });
+  }
+}

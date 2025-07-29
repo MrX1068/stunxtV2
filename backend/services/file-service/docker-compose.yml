@@ -1,0 +1,48 @@
+version: '3.8'
+
+services:
+  file-service:
+    build: .
+    ports:
+      - "3003:3003"
+    environment:
+      - NODE_ENV=production
+      - DB_HOST=postgres
+      - REDIS_HOST=redis
+    depends_on:
+      - postgres
+      - redis
+    volumes:
+      - ./uploads:/app/uploads
+    networks:
+      - file-service-network
+
+  postgres:
+    image: postgres:15-alpine
+    environment:
+      POSTGRES_DB: stunxt_files
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres_password
+    ports:
+      - "5433:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - file-service-network
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - file-service-network
+
+volumes:
+  postgres_data:
+  redis_data:
+
+networks:
+  file-service-network:
+    driver: bridge

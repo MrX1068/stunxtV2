@@ -1,0 +1,236 @@
+version: '3.8'
+
+services:
+  # PostgreSQL Database
+  postgres:
+    image: postgres:15-alpine
+    container_name: stunxtv2_postgres_dev
+    environment:
+      POSTGRES_DB: stunxtv2_dev
+      POSTGRES_USER: dev_user
+      POSTGRES_PASSWORD: dev_password
+      POSTGRES_MULTIPLE_DATABASES: user_management,communities,content,messaging,events,notifications,analytics,payments
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-multiple-databases.sh:/docker-entrypoint-initdb.d/init-multiple-databases.sh
+    networks:
+      - stunxtv2_network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U dev_user -d stunxtv2_dev"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Redis Cache & Message Queue
+  redis:
+    image: redis:7-alpine
+    container_name: stunxtv2_redis_dev
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass dev_redis_password
+    volumes:
+      - redis_data:/data
+    networks:
+      - stunxtv2_network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "dev_redis_password", "ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # Elasticsearch for Search (Optional for MVP)
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: stunxtv2_elasticsearch_dev
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - "ES_JAVA_OPTS=-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - elasticsearch_data:/usr/share/elasticsearch/data
+    networks:
+      - stunxtv2_network
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:9200/_cluster/health || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+
+  # API Gateway Service
+  api-gateway:
+    build:
+      context: ../backend/gateway
+      dockerfile: Dockerfile.dev
+    container_name: stunxtv2_gateway_dev
+    ports:
+      - "3000:3000"
+    environment:
+      - NODE_ENV=development
+      - PORT=3000
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USERNAME=dev_user
+      - DB_PASSWORD=dev_password
+      - DB_NAME=stunxtv2_dev
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=dev_redis_password
+      - JWT_SECRET=your-super-secret-jwt-key-for-development
+      - CORS_ORIGIN=http://localhost:8081,exp://192.168.1.100:8081
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ../backend/gateway:/app
+      - /app/node_modules
+    networks:
+      - stunxtv2_network
+    command: npm run start:dev
+
+  # User Management Service
+  user-service:
+    build:
+      context: ../backend/services/user-management
+      dockerfile: Dockerfile.dev
+    container_name: stunxtv2_user_service_dev
+    ports:
+      - "3001:3001"
+    environment:
+      - NODE_ENV=development
+      - PORT=3001
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USERNAME=dev_user
+      - DB_PASSWORD=dev_password
+      - DB_NAME=user_management
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=dev_redis_password
+      - JWT_SECRET=your-super-secret-jwt-key-for-development
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - ../backend/services/user-management:/app
+      - /app/node_modules
+    networks:
+      - stunxtv2_network
+    command: npm run start:dev
+
+  # Community Management Service
+  community-service:
+    build:
+      context: ../backend/services/community-management
+      dockerfile: Dockerfile.dev
+    container_name: stunxtv2_community_service_dev
+    ports:
+      - "3002:3002"
+    environment:
+      - NODE_ENV=development
+      - PORT=3002
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USERNAME=dev_user
+      - DB_PASSWORD=dev_password
+      - DB_NAME=communities
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=dev_redis_password
+      - USER_SERVICE_URL=http://user-service:3001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+    volumes:
+      - ../backend/services/community-management:/app
+      - /app/node_modules
+    networks:
+      - stunxtv2_network
+    command: npm run start:dev
+
+  # Messaging Service (WebSocket + REST)
+  messaging-service:
+    build:
+      context: ../backend/services/messaging
+      dockerfile: Dockerfile.dev
+    container_name: stunxtv2_messaging_service_dev
+    ports:
+      - "3004:3004"
+    environment:
+      - NODE_ENV=development
+      - PORT=3004
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USERNAME=dev_user
+      - DB_PASSWORD=dev_password
+      - DB_NAME=messaging
+      - REDIS_HOST=redis
+      - REDIS_PORT=6379
+      - REDIS_PASSWORD=dev_redis_password
+      - USER_SERVICE_URL=http://user-service:3001
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+    volumes:
+      - ../backend/services/messaging:/app
+      - /app/node_modules
+    networks:
+      - stunxtv2_network
+    command: npm run start:dev
+
+  # Adminer (Database UI)
+  adminer:
+    image: adminer:latest
+    container_name: stunxtv2_adminer_dev
+    ports:
+      - "8080:8080"
+    environment:
+      ADMINER_DEFAULT_SERVER: postgres
+    depends_on:
+      - postgres
+    networks:
+      - stunxtv2_network
+
+  # Redis Commander (Redis UI)
+  redis-commander:
+    image: rediscommander/redis-commander:latest
+    container_name: stunxtv2_redis_commander_dev
+    ports:
+      - "8081:8081"
+    environment:
+      - REDIS_HOSTS=local:redis:6379:0:dev_redis_password
+    depends_on:
+      - redis
+    networks:
+      - stunxtv2_network
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  elasticsearch_data:
+    driver: local
+
+networks:
+  stunxtv2_network:
+    driver: bridge
+
+# Development services can be started individually:
+# docker-compose -f docker-compose.dev.yml up postgres redis adminer redis-commander
+# docker-compose -f docker-compose.dev.yml up api-gateway user-service community-service
