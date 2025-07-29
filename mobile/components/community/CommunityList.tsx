@@ -50,7 +50,6 @@ export function CommunityList({
     community?.name.toLowerCase().includes(searchQuery?.toLowerCase()) ||
     community?.description.toLowerCase().includes(searchQuery?.toLowerCase())
   ) || []; // Fallback to empty array if communities is null/undefined
-console.log("filteredCommunities", filteredCommunities)
   const renderHeader = () => (
     <VStack space="md" className="px-6 pb-4">
       <HStack className="justify-between items-center">

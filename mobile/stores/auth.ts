@@ -245,17 +245,17 @@ export const useAuthStore = create<AuthState>()(
             setError(null);
             
             const apiStore = useApiStore.getState();
-            const response = await apiStore.post<AuthResult>('/auth/verify-email', {
+            const response = await apiStore.post<BaseApiResponse<AuthResult>>('/auth/verify-email', {
               email,
               otp
             });
             
             // If verification successful, store auth data
-            if (response.user && response.tokens) {
-              setUser(response.user);
-              setToken(response.tokens.accessToken);
+            if (response.success && response.data) {
+              setUser(response.data.user);
+              setToken(response.data.tokens.accessToken);
               set({ 
-                refreshToken: response.tokens.refreshToken,
+                refreshToken: response.data.tokens.refreshToken,
                 isAuthenticated: true 
               });
             }
