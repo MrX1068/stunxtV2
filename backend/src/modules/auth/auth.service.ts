@@ -229,32 +229,9 @@ export class AuthService {
       }
 
       if (user.emailVerified) {
-        // If already verified, still generate tokens to log the user in
-        const fullUser = await this.userRepository.findOne({
-          where: { id: user.id },
-        });
-
-        if (!fullUser) {
-          throw new NotFoundException('User not found');
-        }
-
-        // Generate session and tokens
-        const sessionId = await this.userSessionService.createSession(
-          fullUser.id,
-          ipAddress,
-          userAgent,
-        );
-
-        const tokens = await this.generateTokens(fullUser, sessionId);
-
-        return this.responseService.ok(
-          'Email already verified - logged in successfully',
-          {
-            user: this.sanitizeUser(fullUser),
-            tokens,
-            sessionId,
-          }
-        );
+        // Security: Don't allow login if email is already verified by another account
+        // This prevents unauthorized access via the verification endpoint
+        throw new BadRequestException('Email is already verified and associated with an existing account');
       }
 
       if (!user.emailVerificationToken || !user.passwordResetExpires) {
@@ -300,13 +277,13 @@ export class AuthService {
       await this.emailService.sendWelcomeEmail(email, updatedUser.fullName);
 
       // Generate session and tokens for the newly verified user
-      const sessionId = await this.userSessionService.createSession(
+      const session = await this.userSessionService.createSession(
         updatedUser.id,
         ipAddress,
         userAgent,
       );
 
-      const tokens = await this.generateTokens(updatedUser, sessionId);
+      const tokens = await this.generateTokens(updatedUser, session.id);
 
       // Record successful verification
       await this.loginAttemptService.recordAttempt(
@@ -320,13 +297,13 @@ export class AuthService {
 
       this.logger.log(`Email verified successfully and user logged in: ${email}`);
 
-      return this.responseService.ok(
-        'Email verified successfully - logged in',
+      return this.responseService.success(
         {
           user: this.sanitizeUser(updatedUser),
           tokens,
-          sessionId,
-        }
+          sessionId: session.id,
+        } as AuthResult,
+        'Email verified successfully - logged in'
       );
     } catch (error) {
       if (error instanceof NotFoundException || error instanceof BadRequestException) {
@@ -1413,8 +1390,12 @@ export class AuthService {
    */
   async checkEmailExists(email: string): Promise<boolean> {
     const user = await this.userRepository.findOne({ 
-      where: { email: email.toLowerCase() } 
+      where: { email: email.toLowerCase() },
+      select: ['id', 'emailVerified']
     });
+    
+    // Return true if user exists (regardless of verification status)
+    // This prevents enumeration of verified vs unverified accounts
     return !!user;
   }
 
@@ -1423,7 +1404,8 @@ export class AuthService {
    */
   async checkUsernameExists(username: string): Promise<boolean> {
     const user = await this.userRepository.findOne({ 
-      where: { username: username.toLowerCase() } 
+      where: { username: username.toLowerCase() },
+      select: ['id']
     });
     return !!user;
   }

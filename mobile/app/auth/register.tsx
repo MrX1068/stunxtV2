@@ -62,7 +62,7 @@ export default function RegisterScreen() {
       if (result.success && result?.data?.exists) {
         setValidationErrors(prev => ({
           ...prev,
-          [field]: result?.data?.exists.message
+          [field]: result?.data?.message
         }));
       } else {
         setValidationErrors(prev => {
