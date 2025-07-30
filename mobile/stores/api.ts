@@ -171,7 +171,7 @@ export const useApiStore = create<ApiState>()(
           if (response.status === 401 && token) {
             try {
               // Try to refresh the token
-              await useAuthStore.getState().refreshTokens();
+              await useAuthStore.getState().refreshAuth();
               
               // Retry the original request with new token
               const newToken = useAuthStore.getState().token;

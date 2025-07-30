@@ -21,7 +21,6 @@ export function GluestackUIProvider({
   useEffect(() => {
     setColorScheme(mode);
   }, [mode, setColorScheme]);
-console.log(mode, "config[colorScheme || 'light']", config[colorScheme || 'light'])
   return (
     <View
       style={[
