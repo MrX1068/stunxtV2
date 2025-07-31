@@ -14,13 +14,19 @@ export class UploadProcessor {
   async processUpload(job: Job): Promise<void> {
     const { fileId, fileBuffer, generateVariants } = job.data;
     
-    this.logger.log(`Processing upload job for file: ${fileId}`);
+    this.logger.log(`🔄 Processing upload job for file: ${fileId}`);
+    this.logger.log(`📊 File buffer size: ${fileBuffer?.length || 0} bytes`);
     
     try {
       await this.uploadService.processFileUpload(fileId, fileBuffer, generateVariants);
-      this.logger.log(`Upload processing completed for file: ${fileId}`);
+      this.logger.log(`✅ Upload processing completed for file: ${fileId}`);
     } catch (error) {
-      this.logger.error(`Upload processing failed for file: ${fileId}`, error);
+      this.logger.error(`❌ Upload processing failed for file: ${fileId}`, error);
+      this.logger.error(`Error details:`, {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       throw error;
     }
   }

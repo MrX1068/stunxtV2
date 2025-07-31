@@ -30,6 +30,12 @@ interface FormData {
   websiteUrl?: string;
 }
 
+interface FieldStatus {
+  checking: boolean;
+  available: boolean | null;
+  message: string;
+}
+
 export default function RegisterScreen() {
   const { register, isLoading, error, clearError } = useAuth();
   const apiStore = useApiStore();
@@ -46,33 +52,94 @@ export default function RegisterScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [validationErrors, setValidationErrors] = useState<Partial<FormData>>({});
-  const [checkingDuplicate, setCheckingDuplicate] = useState(false);
-  const [duplicateCheckTimeout, setDuplicateCheckTimeout] = useState<NodeJS.Timeout | null>(null);
+  const [duplicateCheckTimeout, setDuplicateCheckTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
   
-  // Debounced duplicate check function
+  // Field status tracking for better UX
+  const [fieldStatus, setFieldStatus] = useState<{
+    email: FieldStatus;
+    username: FieldStatus;
+  }>({
+    email: { checking: false, available: null, message: '' },
+    username: { checking: false, available: null, message: '' }
+  });
+  
+  // Professional duplicate check function
   const checkForDuplicates = async (field: 'email' | 'username', value: string) => {
-    if (!value || value.length < 3) return;
-    console.log("starteig ", field, value)
+    if (!value || value.length < 3) {
+      // Reset status if value is too short
+      setFieldStatus(prev => ({
+        ...prev,
+        [field]: { checking: false, available: null, message: '' }
+      }));
+      return;
+    }
+
+    // Additional validation for email format
+    if (field === 'email') {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(value)) {
+        setFieldStatus(prev => ({
+          ...prev,
+          [field]: { 
+            checking: false, 
+            available: false, 
+            message: 'Please enter a valid email address' 
+          }
+        }));
+        return;
+      }
+    }
     
     try {
-      console.log("check duplivate")
+      // Set checking status
+      setFieldStatus(prev => ({
+        ...prev,
+        [field]: { checking: true, available: null, message: 'Checking availability...' }
+      }));
+      
       const endpoint = field === 'email' ? 'check-email' : 'check-username';
-      const result = await apiStore.get(`/auth/${endpoint}?${field}=${encodeURIComponent(value)}`);
-      console.log("result", result)
-      if (result.success && result?.data?.exists) {
-        setValidationErrors(prev => ({
+      const requestData = field === 'email' ? { email: value } : { username: value };
+      const result = await apiStore.post(`/auth/${endpoint}`, requestData);
+      
+      if (result.success) {
+        const exists = result?.data?.exists;
+        const message = exists 
+          ? result?.data?.message || `${field === 'email' ? 'Email' : 'Username'} is already taken`
+          : `${field === 'email' ? 'Email' : 'Username'} is available`;
+        
+        setFieldStatus(prev => ({
           ...prev,
-          [field]: result?.data?.message
+          [field]: { 
+            checking: false, 
+            available: !exists, 
+            message 
+          }
         }));
-      } else {
-        setValidationErrors(prev => {
-          const newErrors = { ...prev };
-          delete newErrors[field];
-          return newErrors;
-        });
+        
+        // Update validation errors only for taken fields
+        if (exists) {
+          setValidationErrors(prev => ({
+            ...prev,
+            [field]: result?.data?.message || `${field === 'email' ? 'Email' : 'Username'} is already taken`
+          }));
+        } else {
+          setValidationErrors(prev => {
+            const newErrors = { ...prev };
+            delete newErrors[field];
+            return newErrors;
+          });
+        }
       }
     } catch (error) {
       console.warn(`${field} duplicate check failed:`, error);
+      setFieldStatus(prev => ({
+        ...prev,
+        [field]: { 
+          checking: false, 
+          available: null, 
+          message: 'Unable to check availability' 
+        }
+      }));
     }
   };
 
@@ -87,8 +154,11 @@ export default function RegisterScreen() {
     }
     if (!formData.email.trim()) {
       errors.email = 'Email is required';
-    } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-      errors.email = 'Invalid email format';
+    } else {
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        errors.email = 'Please enter a valid email address';
+      }
     }
     if (!formData.password) {
       errors.password = 'Password is required';
@@ -105,10 +175,17 @@ export default function RegisterScreen() {
 
   const handleInputChange = (field: keyof FormData, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
-    if (validationErrors[field]) {
-      setValidationErrors(prev => ({ ...prev, [field]: undefined }));
-    }
+    
+    // Clear general error
     if (error) clearError();
+    
+    // Reset field status when user starts typing
+    if (field === 'email' || field === 'username') {
+      setFieldStatus(prev => ({
+        ...prev,
+        [field]: { checking: false, available: null, message: '' }
+      }));
+    }
     
     // Debounced duplicate check for email and username
     if ((field === 'email' || field === 'username') && value.length >= 3) {
@@ -117,7 +194,7 @@ export default function RegisterScreen() {
       }
       
       const timeout = setTimeout(() => {
-        checkForDuplicates(field, value);
+        checkForDuplicates(field as 'email' | 'username', value);
       }, 500); // 500ms delay
       
       setDuplicateCheckTimeout(timeout);
@@ -134,6 +211,40 @@ export default function RegisterScreen() {
     } catch (err) {
       console.log('Registration error:', err);
     }
+  };
+
+  // Helper function to render field status
+  const renderFieldStatus = (field: 'email' | 'username') => {
+    const status = fieldStatus[field];
+    
+    if (status.checking) {
+      return (
+        <HStack className="items-center gap-2 mt-1">
+          <Box className="w-3 h-3 bg-primary-500 rounded-full animate-pulse" />
+          <Text className="text-typography-500 text-xs">{status.message}</Text>
+        </HStack>
+      );
+    }
+    
+    if (status.available === true) {
+      return (
+        <HStack className="items-center gap-2 mt-1">
+          <MaterialIcons name="check-circle" size={16} color="#10B981" />
+          <Text className="text-success-600 text-xs">{status.message}</Text>
+        </HStack>
+      );
+    }
+    
+    if (status.available === false) {
+      return (
+        <HStack className="items-center gap-2 mt-1">
+          <MaterialIcons name="error" size={16} color="#EF4444" />
+          <Text className="text-error-600 text-xs">{status.message}</Text>
+        </HStack>
+      );
+    }
+    
+    return null;
   };
 
   return (
@@ -190,10 +301,19 @@ export default function RegisterScreen() {
                   autoComplete="username"
                   editable={!isLoading}
                 />
+                <InputSlot className="pr-3">
+                  <InputIcon>
+                    {fieldStatus.username.checking ? (
+                      <Box className="w-4 h-4 bg-primary-500 rounded-full animate-pulse" />
+                    ) : fieldStatus.username.available === true ? (
+                      <MaterialIcons name="check-circle" size={20} color="#10B981" />
+                    ) : fieldStatus.username.available === false ? (
+                      <MaterialIcons name="error" size={20} color="#EF4444" />
+                    ) : null}
+                  </InputIcon>
+                </InputSlot>
               </Input>
-              {validationErrors.username && (
-                <Text className="text-error-600 text-xs">{validationErrors.username}</Text>
-              )}
+              {renderFieldStatus('username')}
             </VStack>
 
             {/* Email Input */}
@@ -209,10 +329,19 @@ export default function RegisterScreen() {
                   autoComplete="email"
                   editable={!isLoading}
                 />
+                <InputSlot className="pr-3">
+                  <InputIcon>
+                    {fieldStatus.email.checking ? (
+                      <Box className="w-4 h-4 bg-primary-500 rounded-full animate-pulse" />
+                    ) : fieldStatus.email.available === true ? (
+                      <MaterialIcons name="check-circle" size={20} color="#10B981" />
+                    ) : fieldStatus.email.available === false ? (
+                      <MaterialIcons name="error" size={20} color="#EF4444" />
+                    ) : null}
+                  </InputIcon>
+                </InputSlot>
               </Input>
-              {validationErrors.email && (
-                <Text className="text-error-600 text-xs">{validationErrors.email}</Text>
-              )}
+              {renderFieldStatus('email')}
             </VStack>
 
             {/* Password Input */}

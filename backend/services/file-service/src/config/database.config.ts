@@ -1,22 +1,46 @@
-import { ConfigService } from '@nestjs/config';
-import { TypeOrmModuleOptions } from '@nestjs/typeorm';
+import { File } from '../shared/entities/file.entity';
+import { FileVariant } from '../shared/entities/file-variant.entity';
+import { UploadSession } from '../shared/entities/upload-session.entity';
 
-export const databaseConfig = (configService: ConfigService): TypeOrmModuleOptions => ({
-  type: 'postgres',
-  host: configService.get('DB_HOST', 'localhost'),
-  port: configService.get('DB_PORT', 5432),
-  username: configService.get('DB_USERNAME', 'postgres'),
-  password: configService.get('DB_PASSWORD', ''),
-  database: configService.get('DB_DATABASE', 'stunxt_files'),
-  entities: [__dirname + '/../**/*.entity{.ts,.js}'],
-  synchronize: configService.get('NODE_ENV') !== 'production',
-  logging: configService.get('NODE_ENV') === 'development',
-  migrations: [__dirname + '/../migrations/*{.ts,.js}'],
-  migrationsRun: true,
-  ssl: configService.get('DB_SSL') === 'true' ? { rejectUnauthorized: false } : false,
-  extra: {
-    connectionLimit: 10,
-    acquireTimeout: 60000,
-    timeout: 60000,
-  },
-});
+export const databaseConfig = () => {
+  const databaseType = process.env.DATABASE_TYPE || 'postgres';
+  
+  const baseConfig = {
+    synchronize: process.env.DATABASE_SYNCHRONIZE === 'true',
+    logging: process.env.DATABASE_LOGGING === 'true',
+    autoLoadEntities: true,
+    entities: [File, FileVariant, UploadSession],
+    retryAttempts: parseInt(process.env.DATABASE_RETRY_ATTEMPTS || '3', 10),
+    retryDelay: parseInt(process.env.DATABASE_RETRY_DELAY || '3000', 10),
+    maxQueryExecutionTime: parseInt(process.env.DATABASE_MAX_QUERY_TIME || '5000', 10),
+  };
+
+  if (databaseType === 'sqlite') {
+    return {
+      database: {
+        type: 'sqlite' as const,
+        database: process.env.DATABASE_NAME || 'database.sqlite',
+        ...baseConfig,
+      },
+    };
+  }
+
+  // PostgreSQL configuration
+  return {
+    database: {
+      type: 'postgres' as const,
+      host: process.env.DATABASE_HOST || 'localhost',
+      port: parseInt(process.env.DATABASE_PORT || '5432', 10),
+      username: process.env.DATABASE_USER || 'postgres',
+      password: process.env.DATABASE_PASSWORD || 'password',
+      database: process.env.DATABASE_NAME || 'stunxt_files',
+      ssl: process.env.DATABASE_SSL === 'true',
+      ...baseConfig,
+      extra: {
+        connectionLimit: parseInt(process.env.DATABASE_CONNECTION_LIMIT || '10', 10),
+        acquireTimeout: parseInt(process.env.DATABASE_ACQUIRE_TIMEOUT || '60000', 10),
+        timeout: parseInt(process.env.DATABASE_TIMEOUT || '60000', 10),
+      },
+    },
+  };
+};

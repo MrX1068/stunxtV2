@@ -18,6 +18,7 @@ import {
   FilePrivacy 
 } from '../../shared/enums/file.enum';
 import { UploadFileDto } from '../../shared/dto/file.dto';
+import { VirusScannerService } from '../../services/virus-scanner.service';
 
 import { CloudinaryProvider } from '../../providers/cloudinary/cloudinary.provider';
 import { AwsS3Provider } from '../../providers/aws-s3/aws-s3.provider';
@@ -42,6 +43,7 @@ export class UploadService {
     private readonly configService: ConfigService,
     private readonly cloudinaryProvider: CloudinaryProvider,
     private readonly awsS3Provider: AwsS3Provider,
+    private readonly virusScannerService: VirusScannerService,
   ) {}
 
   /**
@@ -57,6 +59,19 @@ export class UploadService {
 
       // Validate file
       await this.validateFile(file);
+
+      // SECURITY: Scan for viruses before processing
+      const scanResult = await this.virusScannerService.scanBuffer(
+        file.buffer, 
+        file.originalname
+      );
+
+      if (scanResult.isInfected) {
+        this.logger.warn(`Virus detected in upload: ${file.originalname}, viruses: ${scanResult.viruses.join(', ')}`);
+        throw new BadRequestException(
+          `File rejected: virus detected (${scanResult.viruses.join(', ')})`
+        );
+      }
 
       // Detect file type
       const fileType = this.detectFileType(file.mimetype);
@@ -87,12 +102,36 @@ export class UploadService {
           ...dto.metadata,
           uploadedAt: new Date().toISOString(),
           userAgent: 'file-service',
+          virusScanned: scanResult.isInfected === false, // Mark as scanned
+          virusScanResult: {
+            scanned: true,
+            clean: !scanResult.isInfected,
+            scanDate: new Date().toISOString(),
+          },
         },
       });
 
       const savedFile = await this.fileRepository.save(fileEntity);
 
-      // Add to upload queue for background processing
+      // For avatar uploads, process immediately (no background queue needed)
+      if (dto.category === FileCategory.AVATAR) {
+        this.logger.log(`🔄 Processing avatar upload immediately: ${savedFile.id}`);
+        this.logger.log(`⏳ Current file primaryUrl: ${savedFile.primaryUrl}`);
+        try {
+          await this.processFileUpload(savedFile.id, file.buffer, dto.variants);
+          // Re-fetch the file to get updated URL
+          const updatedFile = await this.fileRepository.findOne({ where: { id: savedFile.id } });
+          this.logger.log(`✅ Avatar processing completed! Updated URL: ${updatedFile?.primaryUrl}`);
+          return updatedFile || savedFile;
+        } catch (error) {
+          this.logger.error(`❌ Avatar processing failed: ${error.message}`);
+          this.logger.error(`Stack trace:`, error.stack);
+          // Fall back to returning the queued file
+          return savedFile;
+        }
+      }
+
+      // For other files, use background processing
       await this.uploadQueue.add('process-upload', {
         fileId: savedFile.id,
         fileBuffer: file.buffer,
@@ -106,7 +145,7 @@ export class UploadService {
         },
       });
 
-      this.logger.log(`File queued for processing: ${savedFile.id}`);
+      this.logger.log(`File queued for background processing: ${savedFile.id}`);
       return savedFile;
 
     } catch (error) {
@@ -119,18 +158,22 @@ export class UploadService {
    * Process file upload in background
    */
   async processFileUpload(fileId: string, fileBuffer: Buffer, generateVariants?: string[]): Promise<void> {
+    console.log("calling proceed")
     const file = await this.fileRepository.findOne({ where: { id: fileId } });
     if (!file) {
       throw new Error(`File not found: ${fileId}`);
     }
 
     try {
-      this.logger.log(`Processing file upload: ${file.id}`);
+      this.logger.log(`🔄 Processing file upload: ${file.id}`);
+      this.logger.log(`📁 File details: ${file.originalName} (${file.size} bytes)`);
 
       // Choose storage provider based on file type
       const provider = this.chooseStorageProvider(file.type);
+      this.logger.log(`☁️ Using storage provider: ${provider.provider}`);
       
       // Upload to primary storage
+      this.logger.log(`📤 Starting upload to ${provider.provider}...`);
       const uploadResult = await provider.upload({
         fileName: file.filename,
         buffer: fileBuffer,
@@ -139,6 +182,8 @@ export class UploadService {
         metadata: file.metadata,
         isPublic: file.privacy === FilePrivacy.PUBLIC,
       });
+      
+      this.logger.log(`✅ Upload successful! URL: ${uploadResult.url}`);
 
       // Update file with storage information
       file.primaryProvider = provider.provider;
@@ -153,22 +198,32 @@ export class UploadService {
       };
 
       await this.fileRepository.save(file);
+      this.logger.log(`💾 File entity updated with storage info`);
 
       // Generate variants if requested
       if (generateVariants && generateVariants.length > 0) {
+        this.logger.log(`🎨 Queueing variant generation: ${generateVariants.join(', ')}`);
         await this.processingQueue.add('generate-variants', {
           fileId: file.id,
           variants: generateVariants,
         });
       }
 
-      // Upload backup copy if configured
-      await this.uploadBackupCopy(file, fileBuffer);
+      // Upload backup copy if configured (disabled for now)
+      // await this.uploadBackupCopy(file, fileBuffer);
 
-      this.logger.log(`File upload completed: ${file.id}`);
+      this.logger.log(`🎉 File upload completed: ${file.id}`);
+      this.logger.log(`🔗 Final file URL: ${file.primaryUrl}`);
+      this.logger.log(`☁️ Storage provider: ${file.primaryProvider}`);
+      this.logger.log(`📊 File status: ${file.status}`);
 
     } catch (error) {
-      this.logger.error(`File upload processing failed: ${fileId}`, error);
+      this.logger.error(`❌ File upload processing failed: ${fileId}`, error);
+      this.logger.error(`Error details:`, {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
       
       // Update file status to failed
       file.status = FileStatus.FAILED;
@@ -349,5 +404,26 @@ export class UploadService {
       default:
         return 5; // Lowest priority
     }
+  }
+
+  /**
+   * Get upload queue for monitoring
+   */
+  getUploadQueue() {
+    return this.uploadQueue;
+  }
+
+  /**
+   * Get processing queue for monitoring
+   */
+  getProcessingQueue() {
+    return this.processingQueue;
+  }
+
+  /**
+   * Get file by ID
+   */
+  async getFileById(fileId: string) {
+    return await this.fileRepository.findOne({ where: { id: fileId } });
   }
 }

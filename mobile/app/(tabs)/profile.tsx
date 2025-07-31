@@ -12,7 +12,7 @@ import {
   ButtonText,
 } from "@/components/ui";
 import { useTheme } from "@/providers/ThemeContext";
-import { useAuth } from "@/providers/AuthProvider";
+import { useAuth } from "@/stores/auth";
 
 interface UserStats {
   posts: number;
@@ -84,7 +84,7 @@ const menuItems = [
 
 export default function ProfileScreen() {
   const { isDark } = useTheme();
-  const { user, logout } = useAuth();
+  const { user, logout, isLoading, error } = useAuth();
   const [refreshing, setRefreshing] = useState(false);
 
   const onRefresh = async () => {
@@ -99,7 +99,21 @@ export default function ProfileScreen() {
       "Are you sure you want to sign out?",
       [
         { text: "Cancel", style: "cancel" },
-        { text: "Sign Out", style: "destructive", onPress: () => logout() }
+        { 
+          text: "Sign Out", 
+          style: "destructive", 
+          onPress: async () => {
+            try {
+              await logout();
+              // Navigate to the main index page after logout
+              router.replace("/");
+            } catch (error) {
+              console.error("Logout error:", error);
+              // Still navigate even if logout API fails
+              router.replace("/");
+            }
+          }
+        }
       ]
     );
   };
@@ -190,13 +204,13 @@ export default function ProfileScreen() {
               
               <VStack className="items-center gap-1">
                 <Text className="text-xl font-bold text-white">
-                  John Doe
+                  {user?.fullName || "User"}
                 </Text>
                 <Text className="text-primary-100">
-                  @johndoe
+                  @{user?.username || "username"}
                 </Text>
                 <Text className="text-primary-200 text-center mt-2 max-w-xs">
-                  Mobile developer passionate about creating amazing user experiences
+                  {user?.bio || "Bio not provided"}
                 </Text>
               </VStack>
 

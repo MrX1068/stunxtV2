@@ -32,6 +32,9 @@ export interface UpdateUserDto {
   bio?: string;
   location?: string;
   website?: string;
+  websiteUrl?: string; // Add this for frontend compatibility
+  avatarUrl?: string; // Add this for avatar uploads
+  bannerUrl?: string; // Add this for banner uploads
   dateOfBirth?: Date;
   phoneNumber?: string;
   isPublic?: boolean;
@@ -71,6 +74,7 @@ export interface UpdateUserPreferencesDto {
     autoplayGifs?: boolean;
     showRecommendations?: boolean;
   };
+  metadata?: Record<string, any>; // Add this for custom data like interests
 }
 
 export interface UserSearchOptions {
@@ -237,7 +241,7 @@ export class UserService {
     const queryBuilder = this.userRepository
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.profile', 'profile')
-      .leftJoinAndSelect('user.preferences', 'preferences')
+      .leftJoinAndSelect('user.userPreferences', 'userPreferences')
       .where('user.id = :userId', { userId });
 
     // Include private data only if requested and authorized
@@ -245,11 +249,10 @@ export class UserService {
       queryBuilder.select([
         'user.id',
         'user.username',
-        'user.displayName',
+        'user.fullName',
         'user.avatarUrl',
         'user.bannerUrl',
-        'user.isVerified',
-        'user.isPremium',
+        'user.emailVerified',
         'user.role',
         'user.status',
         'user.createdAt',
@@ -291,7 +294,7 @@ export class UserService {
     user = await this.userRepository
       .createQueryBuilder('user')
       .leftJoinAndSelect('user.profile', 'profile')
-      .leftJoinAndSelect('user.preferences', 'preferences')
+      .leftJoinAndSelect('user.userPreferences', 'userPreferences')
       .where('user.username = :identifier OR user.email = :identifier', { identifier: identifier.toLowerCase() })
       .getOne();
 
@@ -346,6 +349,9 @@ export class UserService {
     }
     if (preferencesDto.contentPreferences) {
       preferences.contentPreferences = { ...preferences.contentPreferences, ...preferencesDto.contentPreferences };
+    }
+    if (preferencesDto.metadata) {
+      preferences.metadata = { ...preferences.metadata, ...preferencesDto.metadata };
     }
 
     const savedPreferences = await this.preferencesRepository.save(preferences);
@@ -577,7 +583,7 @@ export class UserService {
     // Apply search query
     if (options.query) {
       queryBuilder.andWhere(
-        '(user.username ILIKE :query OR user.displayName ILIKE :query OR profile.firstName ILIKE :query OR profile.lastName ILIKE :query)',
+        '(user.username ILIKE :query OR user.fullName ILIKE :query OR profile.firstName ILIKE :query OR profile.lastName ILIKE :query)',
         { query: `%${options.query}%` }
       );
     }
@@ -618,10 +624,9 @@ export class UserService {
     queryBuilder.select([
       'user.id',
       'user.username',
-      'user.displayName',
+      'user.fullName',
       'user.avatarUrl',
-      'user.isVerified',
-      'user.isPremium',
+      'user.emailVerified',
       'user.createdAt',
       'user.lastActiveAt',
       'profile.firstName',

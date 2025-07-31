@@ -21,8 +21,7 @@ export class File {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column('varchar', { length: 36 })
-  @Index()
+  @Column('uuid')
   userId: string;
 
   @Column('varchar', { length: 255 })
@@ -44,11 +43,11 @@ export class File {
   checksum: string;
 
   // Storage information
-  @Column('enum', { enum: StorageProvider })
-  primaryProvider: StorageProvider;
+  @Column('enum', { enum: StorageProvider, nullable: true })
+  primaryProvider?: StorageProvider;
 
-  @Column('text')
-  primaryUrl: string;
+  @Column('text', { nullable: true })
+  primaryUrl?: string;
 
   @Column('enum', { enum: StorageProvider, nullable: true })
   backupProvider?: StorageProvider;

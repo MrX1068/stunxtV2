@@ -49,33 +49,37 @@ export class CloudinaryProvider extends StorageProviderInterface {
 
     try {
       const folder = this.configService.get('CLOUDINARY_FOLDER', 'stunxt');
-      const fileName = this.generateFileName(options.fileName, folder);
-
+      
+      // Simple upload options following official docs
       const uploadOptions: UploadApiOptions = {
-        public_id: fileName.replace(/\.[^/.]+$/, ''), // Remove extension
         folder: folder,
         resource_type: 'auto',
-        use_filename: false,
+        use_filename: true,
         unique_filename: true,
         overwrite: false,
-        metadata: options.metadata,
       };
 
-      // Set access mode based on privacy
+      // Set access mode based on privacy 
       if (options.isPublic) {
         uploadOptions.type = 'upload';
-        uploadOptions.access_mode = 'public';
       } else {
         uploadOptions.type = 'private';
-        uploadOptions.access_mode = 'authenticated';
       }
 
-      // Convert buffer to base64 for Cloudinary
-      const base64 = `data:${options.mimeType};base64,${options.buffer.toString('base64')}`;
+      this.logger.log(`🚀 Starting Cloudinary upload to folder: ${folder}`);
 
-      const result: UploadApiResponse = await cloudinary.uploader.upload(base64, uploadOptions);
-
-      this.logger.log(`File uploaded to Cloudinary: ${result.public_id}`);
+      // Use the official documentation pattern - simple upload_stream
+      const result: UploadApiResponse = await new Promise((resolve, reject) => {
+        cloudinary.uploader.upload_stream(uploadOptions, (error, uploadResult) => {
+          if (error) {
+            this.logger.error('❌ Cloudinary upload error:', error);
+            reject(error);
+          } else {
+            this.logger.log('✅ Cloudinary upload successful:', uploadResult?.public_id);
+            resolve(uploadResult as UploadApiResponse);
+          }
+        }).end(options.buffer);
+      });
 
       return {
         url: result.secure_url,

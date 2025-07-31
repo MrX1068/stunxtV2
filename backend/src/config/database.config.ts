@@ -28,7 +28,7 @@ export const databaseConfig = () => {
       port: parseInt(process.env.DATABASE_PORT || '5432', 10),
       username: process.env.DATABASE_USER || 'postgres',
       password: process.env.DATABASE_PASSWORD || 'password',
-      name: process.env.DATABASE_NAME || 'stunxtv2',
+      database: process.env.DATABASE_NAME || 'stunxtv2',
       ssl: process.env.DATABASE_SSL === 'true',
       ...baseConfig,
       extra: {

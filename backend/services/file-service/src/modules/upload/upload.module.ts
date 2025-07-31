@@ -5,9 +5,11 @@ import { MulterModule } from '@nestjs/platform-express';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 
 import { UploadController } from './upload.controller';
+import { HealthController } from '../../controllers/health.controller';
 import { UploadService } from './upload.service';
 import { ResumableUploadService } from './resumable-upload.service';
 import { UploadProcessor } from './upload.processor';
+import { GrpcFileService } from '../../grpc/grpc-file.service';
 
 import { File } from '../../shared/entities/file.entity';
 import { FileVariant } from '../../shared/entities/file-variant.entity';
@@ -15,6 +17,7 @@ import { UploadSession } from '../../shared/entities/upload-session.entity';
 
 import { CloudinaryProvider } from '../../providers/cloudinary/cloudinary.provider';
 import { AwsS3Provider } from '../../providers/aws-s3/aws-s3.provider';
+import { VirusScannerService } from '../../services/virus-scanner.service';
 
 @Module({
   imports: [
@@ -56,13 +59,15 @@ import { AwsS3Provider } from '../../providers/aws-s3/aws-s3.provider';
       inject: [ConfigService],
     }),
   ],
-  controllers: [UploadController],
+  controllers: [UploadController, HealthController],
   providers: [
     UploadService,
     ResumableUploadService,
     UploadProcessor,
     CloudinaryProvider,
     AwsS3Provider,
+    VirusScannerService,
+    GrpcFileService, // Add gRPC service
   ],
   exports: [UploadService, ResumableUploadService],
 })

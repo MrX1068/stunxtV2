@@ -37,6 +37,7 @@ import { LocalAuthGuard } from './guards/local-auth.guard';
 import { GetUser } from './decorators/get-user.decorator';
 import { Public } from './decorators/public.decorator';
 import { User } from '../../shared/entities/user.entity';
+import { CheckEmailDto, CheckUsernameDto } from './dto/check-availability.dto';
 
 interface RequestWithUser extends Request {
   user: User & { sessionId: string };
@@ -98,7 +99,7 @@ export class AuthController {
     return this.authService.register(registerDto, ipAddress, userAgent);
   }
 
-  @Public()
+  @UseGuards(JwtAuthGuard)
   @Post('verify-email')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Verify email address with OTP' })
@@ -554,7 +555,7 @@ export class AuthController {
   }
 
   @Public()
-  @Get('check-email')
+  @Post('check-email')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Check if email is already registered' })
   @ApiQuery({ name: 'email', type: String, description: 'Email to check' })
@@ -570,13 +571,13 @@ export class AuthController {
     },
   })
   async checkEmail(
-    @Query('email') email: string,
+    @Body(ValidationPipe) checkEmailDto: CheckEmailDto,
   ): Promise<{ exists: boolean; message: string }> {
-    if (!email) {
+    if (!checkEmailDto.email) {
       throw new BadRequestException('Email parameter is required');
     }
 
-    const exists = await this.authService.checkEmailExists(email);
+    const exists = await this.authService.checkEmailExists(checkEmailDto.email);
     return {
       exists,
       message: exists ? 'Email is already registered' : 'Email is available',
@@ -584,7 +585,7 @@ export class AuthController {
   }
 
   @Public()
-  @Get('check-username')
+  @Post('check-username')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Check if username is already taken' })
   @ApiQuery({ name: 'username', type: String, description: 'Username to check' })
@@ -600,13 +601,13 @@ export class AuthController {
     },
   })
   async checkUsername(
-    @Query('username') username: string,
+    @Body(ValidationPipe) checkUsernameDto: CheckUsernameDto,
   ): Promise<{ exists: boolean; message: string }> {
-    if (!username) {
+    if (!checkUsernameDto.username) {
       throw new BadRequestException('Username parameter is required');
     }
 
-    const exists = await this.authService.checkUsernameExists(username);
+    const exists = await this.authService.checkUsernameExists(checkUsernameDto.username);
     return {
       exists,
       message: exists ? 'Username is already taken' : 'Username is available',

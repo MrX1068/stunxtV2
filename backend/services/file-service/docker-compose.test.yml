@@ -1,0 +1,59 @@
+version: '3.8'
+
+services:
+  file-service:
+    environment:
+      # Virus scanning configuration
+      - VIRUS_SCAN_ENABLED=true
+      - VIRUS_SCAN_STRICT=false
+      - CLAMD_HOST=clamav-daemon
+      - CLAMD_PORT=3310
+      - CLAMD_TIMEOUT=10000
+    depends_on:
+      - clamav-daemon
+    networks:
+      - stunxt-network
+
+  # ClamAV Daemon for virus scanning
+  clamav-daemon:
+    image: clamav/clamav:stable
+    container_name: stunxt-clamav
+    ports:
+      - "3310:3310"
+    volumes:
+      - clamav-data:/var/lib/clamav
+    environment:
+      - CLAMAV_NO_FRESHCLAMD=false
+      - CLAMD_STARTUP_TIMEOUT=90
+    healthcheck:
+      test: ["CMD", "/usr/local/bin/clamdcheck.sh"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 120s
+    networks:
+      - stunxt-network
+    restart: unless-stopped
+
+  # Optional: ClamAV REST API for easier testing
+  clamav-rest:
+    image: benzino77/clamav-rest-api:latest
+    container_name: stunxt-clamav-rest
+    ports:
+      - "8080:8080"
+    environment:
+      - CLAMD_HOST=clamav-daemon
+      - CLAMD_PORT=3310
+    depends_on:
+      - clamav-daemon
+    networks:
+      - stunxt-network
+    restart: unless-stopped
+
+volumes:
+  clamav-data:
+    driver: local
+
+networks:
+  stunxt-network:
+    external: true

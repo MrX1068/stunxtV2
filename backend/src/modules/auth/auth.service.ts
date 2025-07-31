@@ -1389,6 +1389,9 @@ export class AuthService {
    * Check if email already exists
    */
   async checkEmailExists(email: string): Promise<boolean> {
+    // Email validation is handled by class-validator decorators in DTOs
+    // and ValidationPipe in the controller, so we don't need manual validation here
+    
     const user = await this.userRepository.findOne({ 
       where: { email: email.toLowerCase() },
       select: ['id', 'emailVerified']

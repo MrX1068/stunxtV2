@@ -19,7 +19,7 @@ export class FileVariant {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column('varchar', { length: 36 })
+  @Column('uuid')
   fileId: string;
 
   @Column('enum', { enum: VariantType })
