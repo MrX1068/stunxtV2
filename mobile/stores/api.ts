@@ -167,7 +167,7 @@ export const useApiStore = create<ApiState>()(
           if (token) {
             defaultHeaders.Authorization = `Bearer ${token}`;
           }
-          console.log(url, "url")
+          // Debug log removed: url
           const response = await fetch(url, {
             ...options,
             headers: {
