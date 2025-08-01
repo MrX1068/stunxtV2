@@ -16,6 +16,7 @@ import {
   UploadedFile,
   ParseIntPipe,
   DefaultValuePipe,
+  BadRequestException,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { ApiTags, ApiOperation, ApiResponse, ApiQuery, ApiParam, ApiConsumes, ApiBearerAuth } from '@nestjs/swagger';
@@ -24,13 +25,17 @@ import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../../shared/entities/user.entity';
 import { UserService, UpdateUserDto, UpdateUserPreferencesDto, UserSearchOptions } from './user.service';
+import { GrpcFileClient } from './grpc-file.client';
 
 @ApiTags('Users')
 @Controller('users')
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class UserController {
-  constructor(private readonly userService: UserService) {}
+  constructor(
+    private readonly userService: UserService,
+    private readonly grpcFileClient: GrpcFileClient,
+  ) {}
 
   @Get('me')
   @ApiOperation({ summary: 'Get current user profile' })
@@ -101,11 +106,61 @@ export class UserController {
     @Request() req,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    // TODO: Implement file upload service
-    return {
-      message: 'Avatar upload functionality will be implemented with file service',
-      file: file ? file.filename : null,
-    };
+    console.log('=== Avatar Upload Debug ===');
+    console.log('File received:', !!file);
+    console.log('User ID:', req.user?.id);
+    
+    if (file) {
+      console.log('File details:', {
+        originalname: file.originalname,
+        mimetype: file.mimetype,
+        size: file.size,
+        hasBuffer: !!file.buffer
+      });
+    }
+
+    if (!file) {
+      console.log('❌ No file provided');
+      throw new BadRequestException('No file provided');
+    }
+
+    try {
+      console.log('📤 Starting gRPC upload...');
+      // Upload via gRPC to file service
+      const uploadResult = await this.grpcFileClient.uploadFile(
+        file.buffer,
+        file.originalname,
+        file.mimetype,
+        'avatar',
+        'public',
+        req.user.id,
+      );
+      console.log('✅ gRPC upload successful:', uploadResult);
+
+      // Update user's avatar URL
+      await this.userService.updateUser(req.user.id, { 
+        avatarUrl: uploadResult.url 
+      });
+      console.log('✅ User updated with avatar URL');
+
+      return {
+        success: true,
+        message: 'Avatar uploaded successfully',
+        data: {
+          avatarUrl: uploadResult.url,
+          url: uploadResult.url, // Also include 'url' for compatibility
+          fileName: uploadResult.filename
+        }
+      };
+    } catch (error) {
+      console.error('❌ gRPC file service upload error:', error);
+      console.error('Error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      throw new BadRequestException('Failed to upload avatar');
+    }
   }
 
   @Post('me/banner')
@@ -120,11 +175,38 @@ export class UserController {
     @Request() req,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    // TODO: Implement file upload service
-    return {
-      message: 'Banner upload functionality will be implemented with file service',
-      file: file ? file.filename : null,
-    };
+    if (!file) {
+      throw new BadRequestException('No file provided');
+    }
+
+    try {
+      // Upload via gRPC to file service
+      const uploadResult = await this.grpcFileClient.uploadFile(
+        file.buffer,
+        file.originalname,
+        file.mimetype,
+        'banner',
+        'public',
+        req.user.id,
+      );
+
+      // Update user's banner URL
+      await this.userService.updateUser(req.user.id, { 
+        bannerUrl: uploadResult.url 
+      });
+
+      return {
+        success: true,
+        message: 'Banner uploaded successfully',
+        data: {
+          bannerUrl: uploadResult.url,
+          fileName: uploadResult.filename
+        }
+      };
+    } catch (error) {
+      console.error('gRPC file service upload error:', error);
+      throw new BadRequestException('Failed to upload banner');
+    }
   }
 
   @Get('me/followers')

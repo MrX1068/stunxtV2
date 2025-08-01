@@ -82,6 +82,12 @@ export class User {
   @IsUrl({}, { message: 'Please provide a valid avatar URL' })
   avatarUrl?: string;
 
+  @ApiPropertyOptional({ description: 'User banner URL' })
+  @Column({ name: 'banner_url', nullable: true })
+  @IsOptional()
+  @IsUrl({}, { message: 'Please provide a valid banner URL' })
+  bannerUrl?: string;
+
   @ApiPropertyOptional({ description: 'User bio/description' })
   @Column({ type: 'text', nullable: true })
   @IsOptional()

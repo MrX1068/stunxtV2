@@ -86,6 +86,9 @@ interface AuthState {
   isLoading: boolean;
   error: string | null;
   
+  // Refresh lock to prevent infinite loops
+  isRefreshing: boolean;
+  
   // Actions
   login: (credentials: LoginCredentials) => Promise<void>;
   register: (data: RegisterData) => Promise<void>;
@@ -119,10 +122,12 @@ export const useAuthStore = create<AuthState>()(
         isAuthenticated: false,
         isLoading: false,
         error: null,
+        isRefreshing: false,
         
         // Actions
         login: async (credentials: LoginCredentials) => {
           const { setLoading, setError, setUser, setToken } = get();
+          
           try {
             setLoading(true);
             setError(null);
@@ -136,15 +141,26 @@ export const useAuthStore = create<AuthState>()(
               
               // Check if email verification is required
               if (requiresEmailVerification) {
-                setError('Please verify your email before logging in');
+                // Clear authentication state and set error
+                set({
+                  user,
+                token: tokens.accessToken,
+                refreshToken: tokens.refreshToken,
+                  isAuthenticated: false,
+                  isLoading: false,
+                  error: 'Please verify your email before logging in'
+                });
                 return;
               }
               
-              setUser(user);
-              setToken(tokens.accessToken);
-              set({ 
+              // Batch all state updates together
+              set({
+                user,
+                token: tokens.accessToken,
                 refreshToken: tokens.refreshToken,
-                isAuthenticated: true 
+                isAuthenticated: true,
+                isLoading: false,
+                error: null
               });
             } else {
               throw new Error(response.message || 'Login failed');
@@ -187,16 +203,27 @@ export const useAuthStore = create<AuthState>()(
               const { user, tokens, requiresEmailVerification } = response.data;
               
               if (requiresEmailVerification) {
-                // User needs to verify email after registration
-                setError('Please check your email to verify your account');
+                // Store user and tokens even when email verification is required
+                // This allows authenticated email verification
+                set({
+                  user,
+                  token: tokens.accessToken,
+                  refreshToken: tokens.refreshToken,
+                  isAuthenticated: false, // Not fully authenticated until email verified
+                  isLoading: false,
+                  error: 'Please check your email to verify your account'
+                });
                 return;
               }
               
-              setUser(user);
-              setToken(tokens.accessToken);
-              set({ 
+              // Full authentication for users who don't need email verification
+              set({
+                user,
+                token: tokens.accessToken,
                 refreshToken: tokens.refreshToken,
-                isAuthenticated: true 
+                isAuthenticated: true,
+                isLoading: false,
+                error: null
               });
             } else {
               throw new Error(response.message || 'Registration failed');
@@ -211,29 +238,34 @@ export const useAuthStore = create<AuthState>()(
         },
         
         logout: async () => {
-          const { setLoading, setError, setUser, setToken } = get();
+          const state = get();
+          const { setLoading, setError, token, user } = state;
           
           try {
             setLoading(true);
             setError(null);
             
-            // Call logout endpoint
-            const apiStore = useApiStore.getState();
-            await apiStore.post('/auth/logout');
+            // Only call logout endpoint if we have a valid token
+            if (token && user) {
+              const apiStore = useApiStore.getState();
+              // Make logout call using API store
+              await apiStore.post('/auth/logout');
+            }
             
           } catch (error) {
             // Continue with logout even if API call fails
             console.warn('Logout API call failed:', error);
           } finally {
-            // Clear all auth state
-            setUser(null);
-            setToken(null);
-            set({ 
+            // Always clear auth state regardless of API call success/failure
+            set({
+              user: null,
+              token: null,
               refreshToken: null,
               isAuthenticated: false,
-              error: null 
+              error: null,
+              isRefreshing: false,
+              isLoading: false
             });
-            setLoading(false);
           }
         },
 
@@ -250,13 +282,16 @@ export const useAuthStore = create<AuthState>()(
               otp
             });
             
-            // If verification successful, store auth data
+            // If verification successful, store auth data and mark as fully authenticated
             if (response.success && response.data) {
-              setUser(response.data.user);
-              setToken(response.data.tokens.accessToken);
-              set({ 
+              // Batch all state updates together
+              set({
+                user: response.data.user,
+                token: response.data.tokens.accessToken,
                 refreshToken: response.data.tokens.refreshToken,
-                isAuthenticated: true 
+                isAuthenticated: true, // Now fully authenticated
+                isLoading: false,
+                error: null
               });
             }
           } catch (error) {
@@ -293,15 +328,25 @@ export const useAuthStore = create<AuthState>()(
         },
         
         refreshAuth: async () => {
-          const { refreshToken, setLoading, setError, setUser, setToken } = get();
-          
+          const { refreshToken, setLoading, setError, setUser, setToken, isRefreshing } = get();
+        
           if (!refreshToken) {
             throw new Error('No refresh token available');
           }
           
+          // Prevent multiple simultaneous refresh calls
+          if (isRefreshing) {
+            console.log('Refresh already in progress, skipping...');
+            return;
+          }
+          
           try {
-            setLoading(true);
-            setError(null);
+            // Batch state updates to prevent render-time updates
+            set({ 
+              isRefreshing: true,
+              isLoading: true,
+              error: null
+            });
             
             const apiStore = useApiStore.getState();
             const response = await apiStore.post<BaseApiResponse<AuthResult>>('/auth/refresh', {
@@ -309,13 +354,16 @@ export const useAuthStore = create<AuthState>()(
             });
             
             if (response.success && response.data) {
-              const { user, tokens } = response.data;
+              // The refresh response has tokens directly in data, not nested
+              const tokens = response.data as any; // Cast since refresh has different structure
               
-              setUser(user);
-              setToken(tokens.accessToken);
-              set({ 
+              // Batch all state updates together
+              set({
+                token: tokens.accessToken,
                 refreshToken: tokens.refreshToken,
-                isAuthenticated: true 
+                isAuthenticated: true,
+                isLoading: false,
+                isRefreshing: false
               });
             } else {
               throw new Error(response.message || 'Token refresh failed');
@@ -325,7 +373,11 @@ export const useAuthStore = create<AuthState>()(
             get().logout();
             throw error;
           } finally {
-            setLoading(false);
+            // Ensure loading states are reset
+            set({ 
+              isLoading: false,
+              isRefreshing: false 
+            });
           }
         },
         
@@ -406,6 +458,42 @@ export const useAuthStore = create<AuthState>()(
 // Make auth store globally available for API integration
 if (typeof window !== 'undefined') {
   (window as any).__AUTH_STORE__ = useAuthStore;
+}
+
+// Global Auth Store State Logger (like Redux DevTools)
+if (__DEV__) {
+  useAuthStore.subscribe((state) => {
+    console.log('🔐 AUTH STORE STATE CHANGE:', {
+      timestamp: new Date().toISOString(),
+      user: state.user ? {
+        id: state.user.id,
+        email: state.user.email,
+        username: state.user.username,
+        fullName: state.user.fullName,
+        emailVerified: state.user.emailVerified,
+        status: state.user.status,
+        role: state.user.role,
+        authProvider: state.user.authProvider,
+        lastLoginAt: state.user.lastLoginAt,
+        createdAt: state.user.createdAt
+      } : null,
+      tokens: {
+        accessToken: state.token || null,
+        refreshToken: state.refreshToken || null,
+        hasAccessToken: !!state.token,
+        hasRefreshToken: !!state.refreshToken,
+        accessTokenLength: state.token?.length || 0,
+        refreshTokenLength: state.refreshToken?.length || 0
+      },
+      flags: {
+        isAuthenticated: state.isAuthenticated,
+        isLoading: state.isLoading,
+        isRefreshing: state.isRefreshing,
+        hasError: !!state.error,
+        error: state.error
+      }
+    });
+  });
 }
 
 // Auth hooks for common operations

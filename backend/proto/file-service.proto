@@ -1,0 +1,56 @@
+syntax = "proto3";
+
+package fileservice;
+
+service FileService {
+  rpc UploadFile(UploadFileRequest) returns (UploadFileResponse);
+  rpc DeleteFile(DeleteFileRequest) returns (DeleteFileResponse);
+  rpc GetFileInfo(GetFileInfoRequest) returns (FileInfoResponse);
+}
+
+message UploadFileRequest {
+  bytes file_data = 1;
+  string original_name = 2;
+  string mime_type = 3;
+  string category = 4;
+  string privacy = 5;
+  string user_id = 6;
+}
+
+message UploadFileResponse {
+  bool success = 1;
+  string message = 2;
+  FileInfo file_info = 3;
+}
+
+message DeleteFileRequest {
+  string file_id = 1;
+  string user_id = 2;
+}
+
+message DeleteFileResponse {
+  bool success = 1;
+  string message = 2;
+}
+
+message GetFileInfoRequest {
+  string file_id = 1;
+  string user_id = 2;
+}
+
+message FileInfoResponse {
+  bool success = 1;
+  FileInfo file_info = 2;
+}
+
+message FileInfo {
+  string id = 1;
+  string url = 2;
+  string filename = 3;
+  int64 size = 4;
+  string mime_type = 5;
+  string category = 6;
+  string privacy = 7;
+  string created_at = 8;
+  string updated_at = 9;
+}

@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { View, ScrollView, KeyboardAvoidingView, Platform, Pressable, Alert } from "react-native";
+import { View, ScrollView, KeyboardAvoidingView, Platform, Pressable, Alert, Image } from "react-native";
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -18,6 +18,12 @@ import {
 import { useAuth } from "@/stores/auth";
 import { useApiStore } from "@/stores/api";
 
+interface UploadStatus {
+  uploading: boolean;
+  progress: number;
+  error: string | null;
+}
+
 export default function ProfileSetupScreen() {
   const { isLoading, error: authError, clearError } = useAuth();
   const apiStore = useApiStore();
@@ -29,11 +35,68 @@ export default function ProfileSetupScreen() {
     websiteUrl: "",
   });
   const [error, setError] = useState("");
+  const [uploadStatus, setUploadStatus] = useState<UploadStatus>({
+    uploading: false,
+    progress: 0,
+    error: null,
+  });
 
   const updateField = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
     setError("");
     clearError();
+  };
+
+  const uploadAvatar = async (imageUri: string) => {
+    setUploadStatus({ uploading: true, progress: 0, error: null });
+    
+    try {
+      const uploadFormData = new FormData();
+      uploadFormData.append('avatar', {
+        uri: imageUri,
+        type: 'image/jpeg',
+        name: 'avatar.jpg',
+      } as any);
+      uploadFormData.append('category', 'avatar');
+      uploadFormData.append('privacy', 'public');
+
+      // Show uploading progress
+      setUploadStatus(prev => ({ ...prev, progress: 25 }));
+
+      const uploadResponse = await apiStore.post('/users/me/avatar', uploadFormData, {
+        // Don't set Content-Type for FormData - React Native will set it automatically with boundary
+      });
+
+      // Show processing progress
+      setUploadStatus(prev => ({ ...prev, progress: 75 }));
+
+      console.log("uploadResponse", uploadResponse);
+      console.log("uploadResponse.success", uploadResponse.success);
+      console.log("uploadResponse.data", uploadResponse.data);
+      console.log("uploadResponse.data?.avatarUrl", uploadResponse.data?.avatarUrl);
+
+      // Check for success response - backend returns { success: true, data: { avatarUrl: "..." } }
+      if (uploadResponse.success && uploadResponse.data?.data?.avatarUrl) {
+        console.log("✅ Upload successful, setting avatar URL:", uploadResponse.data?.data?.avatarUrl);
+        setUploadStatus({ uploading: false, progress: 100, error: null });
+        setFormData(prev => ({ ...prev, avatarUrl: uploadResponse.data?.data?.avatarUrl }));
+        return uploadResponse.data?.data?.avatarUrl;
+      } else {
+        console.log("❌ Upload response validation failed");
+        console.log("Success check:", uploadResponse.success);
+        console.log("Data check:", uploadResponse.data);
+        console.log("Avatar URL check:", uploadResponse.data?.avatarUrl);
+        throw new Error('Upload failed - no URL returned');
+      }
+    } catch (uploadError) {
+      console.error('Avatar upload failed:', uploadError);
+      setUploadStatus({ 
+        uploading: false, 
+        progress: 0, 
+        error: 'Failed to upload avatar image' 
+      });
+      throw uploadError;
+    }
   };
 
   const handleImagePicker = async () => {
@@ -46,19 +109,37 @@ export default function ProfileSetupScreen() {
         return;
       }
 
-      // Launch image picker
+      // Launch image picker with updated options (removed deprecated mediaTypes)
       const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
         allowsEditing: true,
         aspect: [1, 1],
         quality: 0.8,
       });
 
       if (!result.canceled && result.assets[0]) {
-        setFormData(prev => ({ ...prev, avatarUrl: result.assets[0].uri }));
+        const imageUri = result.assets[0].uri;
+        
+        // Show selected image immediately for better UX
+        setFormData(prev => ({ ...prev, avatarUrl: imageUri }));
+        
+        // Upload the image immediately
+        try {
+          await uploadAvatar(imageUri);
+        } catch (error) {
+          // Keep the local image but show error
+          Alert.alert(
+            "Upload Failed", 
+            "Image selected but upload failed. You can try again or continue without uploading.",
+            [
+              { text: "Try Again", onPress: () => handleImagePicker() },
+              { text: "Continue", style: "cancel" }
+            ]
+          );
+        }
       }
     } catch (error) {
       console.error('Error picking image:', error);
+      setUploadStatus({ uploading: false, progress: 0, error: 'Failed to pick image' });
     }
   };
 
@@ -114,6 +195,76 @@ export default function ProfileSetupScreen() {
     router.replace("/auth/interests");
   };
 
+  const renderAvatarSection = () => {
+    const isUploading = uploadStatus.uploading;
+    const hasError = uploadStatus.error;
+    const isLocalImage = formData.avatarUrl && formData.avatarUrl.startsWith('file://');
+
+    return (
+      <VStack className="items-center gap-4">
+        <Pressable onPress={handleImagePicker} disabled={isUploading}>
+          <Box className="w-32 h-32 bg-primary-100 rounded-full items-center justify-center border-4 border-background-200 overflow-hidden">
+            {formData.avatarUrl ? (
+              <Image 
+                source={{ uri: formData.avatarUrl }} 
+                style={{ 
+                  width: '100%', 
+                  height: '100%',
+                  borderRadius: 64,
+                }}
+                resizeMode="cover"
+              />
+            ) : (
+              <VStack className="items-center gap-2">
+                <Text className="text-4xl">👤</Text>
+                <Text className="text-primary-600 font-medium text-sm">Add Photo</Text>
+              </VStack>
+            )}
+          </Box>
+        </Pressable>
+        
+        {/* Upload Status */}
+        {isUploading && (
+          <VStack className="items-center gap-2">
+            <Box className="w-full bg-gray-200 rounded-full h-2">
+              <Box 
+                className="bg-primary-500 h-2 rounded-full transition-all duration-300"
+                style={{ width: `${uploadStatus.progress}%` }}
+              />
+            </Box>
+            <Text className="text-typography-600 text-sm">
+              {uploadStatus.progress < 30 ? 'Uploading...' : 
+               uploadStatus.progress < 80 ? 'Processing...' : 
+               'Finishing up...'} {uploadStatus.progress}%
+            </Text>
+          </VStack>
+        )}
+
+        {hasError && (
+          <Text className="text-error-600 text-sm text-center">
+            {uploadStatus.error}
+          </Text>
+        )}
+
+        {isLocalImage && !isUploading && !hasError && (
+          <Text className="text-warning-600 text-sm text-center">
+            Image selected but not uploaded yet
+          </Text>
+        )}
+        
+        <Button 
+          variant="outline" 
+          onPress={handleImagePicker}
+          disabled={isUploading}
+        >
+          <ButtonText>
+            {isUploading ? "Uploading..." : "Choose Photo"}
+          </ButtonText>
+        </Button>
+      </VStack>
+    );
+  };
+
   return (
     <View className="flex-1 bg-background" style={{ paddingTop: insets.top }}>
       <StatusBar style="dark" />
@@ -143,35 +294,7 @@ export default function ProfileSetupScreen() {
           </VStack>
 
           {/* Profile Picture */}
-          <VStack className="items-center gap-4">
-            <Pressable onPress={handleImagePicker}>
-              <Box className="w-32 h-32 bg-primary-100 rounded-full items-center justify-center border-4 border-background-200">
-                {formData.avatarUrl ? (
-                  <Box className="w-full h-full rounded-full overflow-hidden bg-gray-200">
-                    <View style={{ 
-                      width: '100%', 
-                      height: '100%', 
-                      borderRadius: 64,
-                      backgroundColor: '#10B981',
-                      justifyContent: 'center',
-                      alignItems: 'center'
-                    }}>
-                      <Text className="text-white text-lg font-semibold">✓</Text>
-                    </View>
-                  </Box>
-                ) : (
-                  <VStack className="items-center gap-2">
-                    <Text className="text-4xl">👤</Text>
-                    <Text className="text-primary-600 font-medium text-sm">Add Photo</Text>
-                  </VStack>
-                )}
-              </Box>
-            </Pressable>
-            
-            <Button variant="outline" onPress={handleImagePicker}>
-              <ButtonText>Choose Photo</ButtonText>
-            </Button>
-          </VStack>
+          {renderAvatarSection()}
 
           {/* Form Fields */}
           <VStack className="gap-6">
@@ -240,7 +363,7 @@ export default function ProfileSetupScreen() {
               size="lg"
               className="w-full"
               onPress={handleSaveProfile}
-              disabled={isLoading}
+              disabled={isLoading || uploadStatus.uploading}
             >
               <ButtonText className="font-semibold text-white">
                 {isLoading ? "Saving..." : "Continue"}

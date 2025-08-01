@@ -228,7 +228,19 @@ npm run start:prod         # Production mode
 npm run test               # Run tests
 npm run test:e2e           # End-to-end tests
 npm run lint               # Lint code
+
+# 🧪 Advanced Testing Tools
+node test-file-service.js  # Comprehensive Node.js test suite
+.\test-file-service.ps1    # PowerShell test runner (Windows)
 ```
+
+### **Test Suite Features**
+- ✅ Service health monitoring
+- ✅ File upload validation
+- ✅ Virus scanning with EICAR test
+- ✅ Performance benchmarking
+- ✅ Multiple file upload testing
+- ✅ Error handling validation
 
 ### **Database Migrations**
 

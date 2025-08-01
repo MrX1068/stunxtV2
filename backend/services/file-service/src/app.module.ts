@@ -27,13 +27,32 @@ import { AwsS3Provider } from './providers/aws-s3/aws-s3.provider';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
-      load: [fileServiceConfig],
+      load: [databaseConfig, fileServiceConfig],
     }),
 
-    // Database
+    // Database config
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: databaseConfig,
+      useFactory: async (configService: ConfigService) => {
+        const dbConfig = configService.get('database');
+        return {
+          type: 'postgres',
+          host: dbConfig.host,
+          port: dbConfig.port,
+          username: dbConfig.username,
+          password: dbConfig.password,
+          database: dbConfig.database,
+          entities: dbConfig.entities,
+          synchronize: dbConfig.synchronize,
+          logging: dbConfig.logging,
+          migrations: dbConfig.migrations,
+          migrationsRun: dbConfig.migrationsRun,
+          ssl: dbConfig.ssl,
+          retryAttempts: dbConfig.retryAttempts,
+          retryDelay: dbConfig.retryDelay,
+          extra: dbConfig.extra,
+        };
+      },
       inject: [ConfigService],
     }),
 

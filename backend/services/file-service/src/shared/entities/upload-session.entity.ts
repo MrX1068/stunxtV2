@@ -15,8 +15,7 @@ export class UploadSession {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column('varchar', { length: 36 })
-  @Index()
+  @Column('uuid')
   userId: string;
 
   @Column('varchar', { length: 255 })

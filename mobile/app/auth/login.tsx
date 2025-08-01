@@ -77,23 +77,30 @@ export default function LoginScreen() {
     try {
       await login(formData);
       
-      // Check if email is verified after successful login
-      const { user } = useAuthStore.getState();
-      if (user && !user.emailVerified) {
-        // Navigate to OTP verification if email is not verified
-        router.replace(`/auth/otp?email=${encodeURIComponent(formData.email)}`);
-      } else if (user && user.emailVerified) {
-        // Check if user has completed profile setup
-        if (!user.bio && !user.location) {
-          // User hasn't completed profile setup, redirect to profile setup
-          router.replace("/auth/profile-setup");
+      // Check the authentication state after login attempt
+      const { user, isAuthenticated, error } = useAuthStore.getState();
+      
+      // If there's an error (like email verification required), don't navigate
+      if (error) {
+        console.log("Login failed with error:", error);
+        return;
+      }
+      
+      // Only navigate if user is actually authenticated
+      if (isAuthenticated && user) {
+        if (!user.emailVerified) {
+          // Navigate to OTP verification if email is not verified
+          router.replace(`/auth/otp?email=${encodeURIComponent(formData.email)}`);
         } else {
-          // User has completed setup, go to main app
-          router.replace("/(tabs)/home");
+          // Check if user has completed profile setup
+          if (!user.bio && !user.location) {
+            // User hasn't completed profile setup, redirect to profile setup
+            router.replace("/auth/profile-setup");
+          } else {
+            // User has completed setup, go to main app
+            router.replace("/(tabs)/home");
+          }
         }
-      } else {
-        // Navigate to main app on successful login with verified email
-        router.replace("/(tabs)/home");
       }
     } catch (err) {
       // Error is handled by the store and displayed via the error state

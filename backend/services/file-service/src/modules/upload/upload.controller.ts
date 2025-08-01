@@ -37,7 +37,59 @@ import { File } from '../../shared/entities/file.entity';
 export class UploadController {
   constructor(private readonly uploadService: UploadService) {}
 
-  @Post('upload')
+    @Get('queue/status')
+  @ApiOperation({ summary: 'Get upload queue status' })
+  @ApiResponse({ status: HttpStatus.OK, description: 'Queue status retrieved successfully' })
+  async getQueueStatus(): Promise<any> {
+    const uploadQueue = this.uploadService.getUploadQueue();
+    const processingQueue = this.uploadService.getProcessingQueue();
+    
+    const uploadWaiting = await uploadQueue.getWaiting();
+    const uploadActive = await uploadQueue.getActive();
+    const uploadCompleted = await uploadQueue.getCompleted();
+    const uploadFailed = await uploadQueue.getFailed();
+    
+    return {
+      success: true,
+      data: {
+        upload: {
+          waiting: uploadWaiting.length,
+          active: uploadActive.length,
+          completed: uploadCompleted.length,
+          failed: uploadFailed.length,
+        },
+        processing: {
+          waiting: (await processingQueue.getWaiting()).length,
+          active: (await processingQueue.getActive()).length,
+          completed: (await processingQueue.getCompleted()).length,
+          failed: (await processingQueue.getFailed()).length,
+        }
+      }
+    };
+  }
+
+  @Get('file/:id/status')
+  @ApiOperation({ summary: 'Get file processing status' })
+  @ApiResponse({ status: HttpStatus.OK, description: 'File status retrieved successfully' })
+  async getFileStatus(@Param('id') fileId: string): Promise<any> {
+    const file = await this.uploadService.getFileById(fileId);
+    if (!file) {
+      throw new NotFoundException('File not found');
+    }
+    
+    return {
+      success: true,
+      data: {
+        id: file.id,
+        status: file.status,
+        primaryUrl: file.primaryUrl,
+        primaryProvider: file.primaryProvider,
+        metadata: file.metadata,
+      }
+    };
+  }
+
+  @Post('upload/file')
   @UseInterceptors(FileInterceptor('file'))
   @ApiOperation({ summary: 'Upload a single file' })
   @ApiConsumes('multipart/form-data')

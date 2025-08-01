@@ -4,13 +4,6 @@ import { Transform, Type } from 'class-transformer';
 import { FileCategory, FilePrivacy, VariantType } from '../enums/file.enum';
 
 export class UploadFileDto {
-  @ApiProperty({ 
-    type: 'string', 
-    format: 'binary',
-    description: 'File to upload'
-  })
-  file: Express.Multer.File;
-
   @ApiPropertyOptional({ 
     enum: FileCategory,
     description: 'File category',

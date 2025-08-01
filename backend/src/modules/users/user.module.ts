@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { CacheModule } from '@nestjs/cache-manager';
 import { UserController } from './user.controller';
 import { UserService } from './user.service';
+import { GrpcFileClient } from './grpc-file.client';
 import { User } from '../../shared/entities/user.entity';
 import { UserProfile } from '../../shared/entities/user-profile.entity';
 import { UserPreferences } from '../../shared/entities/user-preferences.entity';
@@ -23,7 +24,7 @@ import { UserSession } from '../../shared/entities/user-session.entity';
     // Note: Using global Redis cache from MessagingModule (isGlobal: true)
   ],
   controllers: [UserController],
-  providers: [UserService],
+  providers: [UserService, GrpcFileClient],
   exports: [UserService],
 })
 export class UserModule {}

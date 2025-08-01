@@ -57,10 +57,12 @@ export default function InterestSelectionScreen() {
     setError("");
 
     try {
-      // Save interests to user preferences
+      // Save interests to user preferences using the correct field structure
       await apiStore.put('/users/me/preferences', {
-        interests: selectedInterests,
-        onboardingCompleted: true
+        metadata: {
+          interests: selectedInterests,
+          onboardingCompleted: true
+        }
       });
       
       // Navigate to main app

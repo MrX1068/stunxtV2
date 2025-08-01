@@ -1,19 +1,30 @@
 import React, { useEffect, ReactNode } from "react";
-import { router } from "expo-router";
 import { useAuth } from "@/stores/auth";
+import * as SecureStore from 'expo-secure-store';
 
 interface AuthProviderProps {
   children: ReactNode;
 }
 
 export function AuthProvider({ children }: AuthProviderProps) {
-  const { isAuthenticated, isLoading, user, refreshAuth } = useAuth();
+  const { refreshAuth } = useAuth();
 
   useEffect(() => {
-    // Try to refresh auth status on app start
+    // Check if we have stored tokens before attempting refresh
     const initAuth = async () => {
       try {
-        await refreshAuth();
+        console.log('AuthProvider - Checking initial auth state...');
+        
+        // Only attempt refresh if we have stored tokens
+        const storedToken = await SecureStore.getItemAsync('auth_token');
+        const storedRefreshToken = await SecureStore.getItemAsync('refresh_token');
+        
+        if (storedToken && storedRefreshToken) {
+          console.log('AuthProvider - Found stored tokens, attempting refresh...');
+          await refreshAuth();
+        } else {
+          console.log('AuthProvider - No stored tokens found, skipping refresh');
+        }
       } catch (error) {
         // If refresh fails, user is not authenticated - this is fine
         console.log("Auth refresh failed:", error);
@@ -22,27 +33,6 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
     initAuth();
   }, []);
-
-  useEffect(() => {
-    // Handle navigation based on auth state
-    if (!isLoading) {
-      if (isAuthenticated && user) {
-        // User is authenticated, check if they're on auth screens
-        const currentPath = router.pathname || '/';
-        if (currentPath.startsWith('/auth') || currentPath === '/onboarding' || currentPath === '/') {
-          // Redirect to main app
-          router.replace('/(tabs)/home');
-        }
-      } else {
-        // User is not authenticated, check if they're on protected screens
-        const currentPath = router.pathname || '/';
-        if (currentPath.startsWith('/(tabs)') || currentPath.startsWith('/create') || currentPath.startsWith('/settings')) {
-          // Redirect to welcome/auth
-        //   router.replace('/');
-        }
-      }
-    }
-  }, [isAuthenticated, isLoading, user]);
 
   return <>{children}</>;
 }

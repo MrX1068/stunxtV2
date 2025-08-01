@@ -57,6 +57,9 @@ interface ApiState {
   // Request tracking
   requestCount: number;
   
+  // Token refresh tracking
+  isRefreshingToken: boolean;
+  
   // Actions
   setLoading: (loading: boolean) => void;
   setError: (error: string | null) => void;
@@ -81,6 +84,7 @@ export const useApiStore = create<ApiState>()(
       isLoading: false,
       error: null,
       requestCount: 0,
+      isRefreshingToken: false,
       
       // Actions
       setLoading: (loading) => set({ isLoading: loading }),
@@ -108,7 +112,7 @@ export const useApiStore = create<ApiState>()(
       post: async <T = any>(endpoint: string, data?: any, options: RequestInit = {}): Promise<T> => {
         return get().makeRequest<T>(endpoint, {
           method: 'POST',
-          body: data ? JSON.stringify(data) : undefined,
+          body: data instanceof FormData ? data : (data ? JSON.stringify(data) : undefined),
           ...options
         });
       },
@@ -121,7 +125,7 @@ export const useApiStore = create<ApiState>()(
         });
       },
       
-      patch: async <T = any>(endpoint: string, data?: any, options: RequestInit = {}): Promise<T> => {
+      patch: async <T = any>(endpoint: string, data?: any, options?: RequestInit) => {
         return get().makeRequest<T>(endpoint, {
           method: 'PATCH',
           body: data ? JSON.stringify(data) : undefined,
@@ -138,7 +142,7 @@ export const useApiStore = create<ApiState>()(
       
       // Private method for making requests
       makeRequest: async <T = any>(endpoint: string, options: RequestInit = {}): Promise<T> => {
-        const { incrementRequest, decrementRequest, setError } = get();
+        const { incrementRequest, decrementRequest, setError, isRefreshingToken } = get();
         
         try {
           incrementRequest();
@@ -146,19 +150,24 @@ export const useApiStore = create<ApiState>()(
           
           // Import auth store dynamically to avoid circular dependency
           const { useAuthStore } = await import('./auth');
-          const token = useAuthStore.getState().token;
+          const authState = useAuthStore.getState();
+          const token = authState.token;
           
           const url = endpoint.startsWith('http') ? endpoint : `${API_BASE_URL}${endpoint}`;
           
           const defaultHeaders: HeadersInit = {
-            'Content-Type': 'application/json',
             'Accept': 'application/json',
           };
+          
+          // Only set Content-Type for non-FormData requests
+          if (!(options.body instanceof FormData)) {
+            defaultHeaders['Content-Type'] = 'application/json';
+          }
           
           if (token) {
             defaultHeaders.Authorization = `Bearer ${token}`;
           }
-          
+          // Debug log removed: url
           const response = await fetch(url, {
             ...options,
             headers: {
@@ -166,12 +175,16 @@ export const useApiStore = create<ApiState>()(
               ...options.headers,
             },
           });
-          
+          // Removed debug log for response to clean up production code
           // Handle token expiry with automatic refresh
-          if (response.status === 401 && token) {
+          // For logout endpoint: try refresh once to enable proper server-side cleanup
+          // For other endpoints: normal refresh behavior
+          if (response.status === 401 && token && !isRefreshingToken && endpoint !== '/auth/refresh') {
             try {
+              set({ isRefreshingToken: true });
+              
               // Try to refresh the token
-              await useAuthStore.getState().refreshAuth();
+              await authState.refreshAuth();
               
               // Retry the original request with new token
               const newToken = useAuthStore.getState().token;
@@ -191,11 +204,24 @@ export const useApiStore = create<ApiState>()(
                   const data = await retryResponse.json();
                   return data as T;
                 }
+                
+                // For logout endpoint: if retry fails, it's ok - we'll continue with local logout
+                if (endpoint === '/auth/logout' && !retryResponse.ok) {
+                  console.log('Logout API call failed after token refresh, continuing with local logout');
+                  return {} as T; // Return empty success for logout
+                }
               }
             } catch (refreshError) {
-              // If refresh fails, redirect to login
-              console.log('Token refresh failed, redirecting to login');
-              // The auth store will handle logout and navigation
+              // If refresh fails, the auth store will handle logout
+              console.log('Token refresh failed:', refreshError);
+              
+              // For logout endpoint: if refresh fails, it's ok - continue with local logout
+              if (endpoint === '/auth/logout') {
+                console.log('Token refresh failed during logout, continuing with local logout');
+                return {} as T; // Return empty success for logout
+              }
+            } finally {
+              set({ isRefreshingToken: false });
             }
           }
           
@@ -212,6 +238,11 @@ export const useApiStore = create<ApiState>()(
             }
             
             throw new ApiError(errorMessage, response.status, response);
+          }
+          
+          // Handle 204 No Content responses
+          if (response.status === 204) {
+            return {} as T;
           }
           
           const data = await response.json();
