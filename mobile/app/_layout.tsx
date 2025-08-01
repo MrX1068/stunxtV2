@@ -1,7 +1,6 @@
 import "../global.css";
 import React from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { StatusBar } from "expo-status-bar";
 import { Stack } from "expo-router";
 import { GluestackUIProvider } from "@/components/ui/gluestack-ui-provider";
 import { ThemeProvider, useTheme } from "@/providers/ThemeContext";
@@ -27,7 +26,7 @@ const AppContent = () => {
   return (
     <SafeAreaProvider>
       {/* Single StatusBar for the entire app */}
-      <StatusBar style={"dark"} />
+      {/* StatusBar is now handled in ThemeProvider */}
       
       <GluestackUIProvider mode={colorMode}>
         {/* Single SafeAreaView with semantic background */}
