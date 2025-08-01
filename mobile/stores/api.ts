@@ -249,7 +249,6 @@ export const useApiStore = create<ApiState>()(
           return data as T;
           
         } catch (error) {
-          console.log("error ", error)
           const message = error instanceof Error ? error.message : 'Unknown error occurred';
           setError(message);
           throw error;
