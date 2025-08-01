@@ -1,81 +1,90 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import * as SecureStore from 'expo-secure-store';
+import React, { createContext, useContext, useState, useEffect } from "react";
+import { StatusBar } from "expo-status-bar";
+import { useColorScheme as useRNColorScheme } from "react-native";
+import * as SecureStore from "expo-secure-store";
 
-type ColorMode = 'light' | 'dark' | 'system';
+type ColorMode = "light" | "dark" | "system";
 
 interface ThemeContextType {
   colorMode: ColorMode;
-  toggleColorMode: () => void;
   setColorMode: (mode: ColorMode) => void;
+  toggleColorMode: () => void;
   isDark: boolean;
+  isLoading: boolean;
 }
 
-const ThemeContext = createContext<ThemeContextType>({
-  colorMode: 'system',
-  toggleColorMode: () => {},
-  setColorMode: () => {},
-  isDark: false,
-});
+const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
 
-export const useTheme = () => {
-  const context = useContext(ThemeContext);
-  if (!context) {
-    throw new Error('useTheme must be used within ThemeProvider');
-  }
-  return context;
-};
+const THEME_STORAGE_KEY = "app-theme-mode";
 
-interface ThemeProviderProps {
-  children: React.ReactNode;
-}
+export function ThemeProvider({ children }: { children: React.ReactNode }) {
+  const systemColorScheme = useRNColorScheme();
+  const [colorMode, setColorMode] = useState<ColorMode>("system");
+  const [isLoading, setIsLoading] = useState(true);
 
-export const ThemeProvider: React.FC<ThemeProviderProps> = ({ children }) => {
-  const [colorMode, setColorModeState] = useState<ColorMode>('system');
+  // Calculate if current mode is dark
+  const isDark = colorMode === "system" 
+    ? systemColorScheme === "dark" 
+    : colorMode === "dark";
 
-  // Load saved theme preference
+  // Load theme from secure storage on mount
   useEffect(() => {
-    const loadTheme = async () => {
+    async function loadTheme() {
       try {
-        const savedTheme = await SecureStore.getItemAsync('theme');
-        if (savedTheme && ['light', 'dark', 'system'].includes(savedTheme)) {
-          setColorModeState(savedTheme as ColorMode);
+        const savedTheme = await SecureStore.getItemAsync(THEME_STORAGE_KEY);
+        if (savedTheme && ["light", "dark", "system"].includes(savedTheme)) {
+          setColorMode(savedTheme as ColorMode);
         }
       } catch (error) {
-        console.warn('Failed to load theme preference:', error);
+        console.warn("Failed to load theme from storage:", error);
+        // Fallback to system theme if storage fails
+        setColorMode("system");
+      } finally {
+        setIsLoading(false);
       }
-    };
+    }
+    
     loadTheme();
   }, []);
 
-  // Save theme preference
-  const setColorMode = async (mode: ColorMode) => {
+  // Save theme to secure storage when it changes
+  const handleSetColorMode = async (newMode: ColorMode) => {
     try {
-      await SecureStore.setItemAsync('theme', mode);
-      setColorModeState(mode);
+      await SecureStore.setItemAsync(THEME_STORAGE_KEY, newMode);
+      setColorMode(newMode);
     } catch (error) {
-      console.warn('Failed to save theme preference:', error);
-      setColorModeState(mode);
+      console.warn("Failed to save theme to storage:", error);
+      // Still update state even if storage fails
+      setColorMode(newMode);
     }
   };
 
+  // Toggle between light and dark (skip system)
   const toggleColorMode = () => {
-    const newMode = colorMode === 'light' ? 'dark' : 'light';
-    setColorMode(newMode);
-  };
-
-  // Determine if current theme is dark
-  const isDark = colorMode === 'dark';
-
-  const value: ThemeContextType = {
-    colorMode,
-    toggleColorMode,
-    setColorMode,
-    isDark,
+    const newMode = isDark ? "light" : "dark";
+    handleSetColorMode(newMode);
   };
 
   return (
-    <ThemeContext.Provider value={value}>
+    <ThemeContext.Provider 
+      value={{ 
+        colorMode, 
+        setColorMode: handleSetColorMode, 
+        toggleColorMode,
+        isDark, 
+        isLoading 
+      }}
+    >
+      <StatusBar style={isDark ? "light" : "dark"} />
       {children}
     </ThemeContext.Provider>
   );
-};
+}
+
+export function useTheme() {
+  const context = useContext(ThemeContext);
+  if (context === undefined) {
+    throw new Error("useTheme must be used within a ThemeProvider");
+  }
+  return context;
+}
