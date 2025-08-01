@@ -142,7 +142,6 @@ export default function OTPVerificationScreen() {
                     maxLength={1}
                     selectTextOnFocus
                     className="text-xl font-bold text-typography-900 text-center w-full h-full"
-                    style={{ outline: 'none' }}
                   />
                 </Box>
               ))}
