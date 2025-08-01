@@ -175,7 +175,7 @@ export const useApiStore = create<ApiState>()(
               ...options.headers,
             },
           });
-          console.log("response", response)
+          // Removed debug log for response to clean up production code
           // Handle token expiry with automatic refresh
           // For logout endpoint: try refresh once to enable proper server-side cleanup
           // For other endpoints: normal refresh behavior
