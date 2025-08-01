@@ -1,7 +1,7 @@
 import React from 'react';
 import { Pressable } from 'react-native';
 import { Box, HStack, Text, VStack } from '@/components/ui';
-import { useTheme } from '@/providers/ThemeProvider';
+import { useTheme } from '@/providers/ThemeContext';
 import { MaterialIcons } from '@expo/vector-icons';
 
 interface ThemeOption {
