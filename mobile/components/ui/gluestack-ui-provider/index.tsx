@@ -30,7 +30,7 @@ export function GluestackUIProvider({
   return (
     <View
       style={[
-        config[colorScheme || currentMode],
+        config[(colorScheme === 'light' || colorScheme === 'dark' ? colorScheme : currentMode === 'dark' ? 'dark' : 'light')],
         { flex: 1, height: '100%', width: '100%' },
         style,
       ]}
