@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ScrollView, KeyboardAvoidingView, Platform } from 'react-native';
+import { ScrollView, KeyboardAvoidingView, Platform, Pressable } from 'react-native';
 import { router, useLocalSearchParams } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import {
@@ -23,38 +23,72 @@ const spaceTypes = [
     id: 'public', 
     label: 'Public Space', 
     icon: 'public' as const,
-    description: 'Anyone in the community can access'
+    description: 'Anyone in the community can join and participate',
+    color: 'emerald'
   },
   { 
     id: 'private', 
     label: 'Private Space', 
     icon: 'lock' as const,
-    description: 'Only invited members can access'
+    description: 'Only invited members can join and see content',
+    color: 'amber'
   },
   { 
     id: 'secret', 
     label: 'Secret Space', 
     icon: 'visibility-off' as const,
-    description: 'Hidden from community members'
+    description: 'Hidden space, completely invisible to non-members',
+    color: 'purple'
   },
 ];
 
 const spaceCategories = [
-  { id: 'general', label: 'General', icon: 'chat' as const },
-  { id: 'announcements', label: 'Announcements', icon: 'campaign' as const },
-  { id: 'discussion', label: 'Discussion', icon: 'forum' as const },
-  { id: 'projects', label: 'Projects', icon: 'work' as const },
-  { id: 'support', label: 'Support', icon: 'help' as const },
-  { id: 'social', label: 'Social', icon: 'people' as const },
-  { id: 'gaming', label: 'Gaming', icon: 'sports-esports' as const },
-  { id: 'tech', label: 'Tech', icon: 'computer' as const },
-  { id: 'creative', label: 'Creative', icon: 'palette' as const },
-  { id: 'education', label: 'Education', icon: 'school' as const },
-  { id: 'business', label: 'Business', icon: 'business' as const },
-  { id: 'entertainment', label: 'Entertainment', icon: 'movie' as const },
-  { id: 'sports', label: 'Sports', icon: 'sports' as const },
-  { id: 'news', label: 'News', icon: 'newspaper' as const },
-  { id: 'other', label: 'Other', icon: 'more-horiz' as const },
+  { id: 'general', label: 'General', icon: 'chat' as const, emoji: '💬' },
+  { id: 'announcements', label: 'Announcements', icon: 'campaign' as const, emoji: '📢' },
+  { id: 'discussion', label: 'Discussion', icon: 'forum' as const, emoji: '🗣️' },
+  { id: 'projects', label: 'Projects', icon: 'work' as const, emoji: '🚀' },
+  { id: 'support', label: 'Support', icon: 'help' as const, emoji: '💡' },
+  { id: 'social', label: 'Social', icon: 'people' as const, emoji: '🎉' },
+  { id: 'gaming', label: 'Gaming', icon: 'sports-esports' as const, emoji: '🎮' },
+  { id: 'tech', label: 'Tech', icon: 'computer' as const, emoji: '💻' },
+  { id: 'creative', label: 'Creative', icon: 'palette' as const, emoji: '🎨' },
+  { id: 'education', label: 'Education', icon: 'school' as const, emoji: '📚' },
+  { id: 'business', label: 'Business', icon: 'business' as const, emoji: '💼' },
+  { id: 'entertainment', label: 'Entertainment', icon: 'movie' as const, emoji: '🎬' },
+  { id: 'sports', label: 'Sports', icon: 'sports' as const, emoji: '⚽' },
+  { id: 'news', label: 'News', icon: 'newspaper' as const, emoji: '📰' },
+  { id: 'other', label: 'Other', icon: 'more-horiz' as const, emoji: '📁' },
+];
+
+const interactionTypes = [
+  { 
+    id: 'chat', 
+    label: 'Chat Space', 
+    icon: 'chat' as const,
+    description: 'Real-time messaging and conversations',
+    emoji: '💬'
+  },
+  { 
+    id: 'post', 
+    label: 'Post Space', 
+    icon: 'article' as const,
+    description: 'Announcements and feed-style posts',
+    emoji: '📝'
+  },
+  { 
+    id: 'forum', 
+    label: 'Forum Space', 
+    icon: 'forum' as const,
+    description: 'Threaded discussions and topics',
+    emoji: '🗨️'
+  },
+  { 
+    id: 'feed', 
+    label: 'Feed Space', 
+    icon: 'dynamic-feed' as const,
+    description: 'Social media style activity feed',
+    emoji: '📱'
+  },
 ];
 
 export default function CreateSpaceScreen() {
@@ -71,6 +105,7 @@ export default function CreateSpaceScreen() {
     communityId: communityId || '',
     type: 'public',
     category: 'general',
+    interactionType: 'chat', // Add default interaction type
   });
   
   const [validationErrors, setValidationErrors] = useState<Partial<CreateSpaceData>>({});
@@ -125,30 +160,35 @@ export default function CreateSpaceScreen() {
   return (
     <KeyboardAvoidingView
       behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-      className="flex-1"
+      className="flex-1 bg-gray-50 dark:bg-gray-900"
     >
       <StatusBar style={isDark ? 'light' : 'dark'} />
       
-      <ScrollView className="flex-1 bg-background-0">
-        {/* Header */}
-        <Box className="bg-background-0 border-b border-outline-200 pt-12 pb-4 px-6">
-          <HStack className="justify-between items-center">
-            <Button variant="link" size="sm" onPress={() => router.back()}>
-              <HStack space="xs" className="items-center">
-                <MaterialIcons name="arrow-back" size={20} color="#6366F1" />
-                <Text className="text-primary-600">Back</Text>
-              </HStack>
-            </Button>
-            
-            <Heading size="lg" className="font-bold text-typography-900">
+      {/* Enhanced Header */}
+      <Box className="bg-white dark:bg-gray-900 border-b border-gray-100 dark:border-gray-800 pt-12 pb-6 px-6 shadow-sm">
+        <HStack className="justify-between items-center">
+          <Button variant="link" size="sm" onPress={() => router.back()}>
+            <HStack space="sm" className="items-center">
+              <MaterialIcons name="arrow-back" size={20} color="#6366F1" />
+              <Text className="text-primary-600 font-medium">Back</Text>
+            </HStack>
+          </Button>
+          
+          <VStack className="items-center">
+            <Heading size="xl" className="font-bold text-gray-900 dark:text-gray-100">
               Create Space
             </Heading>
-            
-            <Box className="w-16" />
-          </HStack>
-        </Box>
-
-        <VStack space="lg" className="p-6">
+            <Text size="sm" className="text-gray-500 dark:text-gray-400">
+              Build a focused discussion area
+            </Text>
+          </VStack>
+          
+          <Box className="w-16" />
+        </HStack>
+      </Box>
+      
+      <ScrollView className="flex-1" showsVerticalScrollIndicator={false}>
+        <VStack space="xl" className="p-6">
           {/* Community Selection */}
           {!communityId && availableCommunities.length > 0 && (
             <VStack space="sm">
@@ -184,6 +224,34 @@ export default function CreateSpaceScreen() {
               )}
             </VStack>
           )}
+
+          {/* Interaction Type */}
+          <VStack space="sm">
+            <Text size="md" className="font-medium text-typography-900">
+              Space Type & Interaction
+            </Text>
+            <VStack space="md">
+              {interactionTypes.map((interaction) => (
+                <Button
+                  key={interaction.id}
+                  variant={formData.interactionType === interaction.id ? "solid" : "outline"}
+                  onPress={() => updateFormData('interactionType', interaction.id)}
+                >
+                  <HStack space="md" className="items-center">
+                    <Text size="lg">{interaction.emoji}</Text>
+                    <VStack className="flex-1">
+                      <ButtonText className={formData.interactionType === interaction.id ? "text-white" : "text-typography-600"}>
+                        {interaction.label}
+                      </ButtonText>
+                      <Text size="sm" className={formData.interactionType === interaction.id ? "text-white opacity-80" : "text-typography-500"}>
+                        {interaction.description}
+                      </Text>
+                    </VStack>
+                  </HStack>
+                </Button>
+              ))}
+            </VStack>
+          </VStack>
 
           {/* Space Type */}
           <VStack space="sm">

@@ -10,16 +10,48 @@ export interface User {
   username: string;
   fullName: string;
   avatarUrl?: string;
-  bio?: string;
-  location?: string;
-  websiteUrl?: string;
+  bannerUrl?: string;
   status: 'active' | 'inactive' | 'suspended' | 'banned';
   role: 'user' | 'moderator' | 'admin' | 'super_admin';
   authProvider: 'local' | 'google' | 'facebook' | 'apple';
   emailVerified: boolean;
+  isVerified: boolean;
   lastLoginAt?: string;
   createdAt: string;
   updatedAt: string;
+  // Relations
+  profile?: {
+    bio?: string;
+    location?: string;
+    website?: string;
+    isPublic?: boolean;
+    allowFollowers?: boolean;
+  };
+  preferences?: {
+    theme: string;
+    language: string;
+    metadata?: {
+      interests?: string[];
+      onboardingCompleted?: boolean;
+    };
+  };
+  stats?: {
+    postCount: number;
+    followerCount: number;
+    followingCount: number;
+    communityCount: number;
+  };
+  // Virtual properties from backend
+  interests?: string[];
+  isOnboardingComplete?: boolean;
+  userStats?: {
+    posts: number;
+    followers: number;
+    following: number;
+    communities: number;
+  };
+  // Data freshness tracking
+  lastFetched?: string;
 }
 
 export interface LoginCredentials {
@@ -102,6 +134,8 @@ interface AuthState {
   
   // Profile actions
   updateProfile: (data: Partial<User>) => Promise<void>;
+  refreshUserData: () => Promise<void>;
+  refreshUserDataIfStale: () => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
   
   // Internal actions
@@ -155,7 +189,10 @@ export const useAuthStore = create<AuthState>()(
               
               // Batch all state updates together
               set({
-                user,
+                user: {
+                  ...user,
+                  lastFetched: new Date().toISOString()
+                },
                 token: tokens.accessToken,
                 refreshToken: tokens.refreshToken,
                 isAuthenticated: true,
@@ -330,17 +367,26 @@ export const useAuthStore = create<AuthState>()(
         refreshAuth: async () => {
           const { refreshToken, setLoading, setError, setUser, setToken, isRefreshing } = get();
         
+          console.log('🔄 AUTH: refreshAuth called:', {
+            timestamp: new Date().toISOString(),
+            hasRefreshToken: !!refreshToken,
+            refreshToken: refreshToken?.substring(0, 20) + '...',
+            isRefreshing
+          });
+
           if (!refreshToken) {
+            console.log('❌ AUTH: No refresh token available');
             throw new Error('No refresh token available');
           }
           
           // Prevent multiple simultaneous refresh calls
           if (isRefreshing) {
-            console.log('Refresh already in progress, skipping...');
+            console.log('⏸️ AUTH: Refresh already in progress, skipping...');
             return;
           }
           
           try {
+            console.log('🔄 AUTH: Starting token refresh...');
             // Batch state updates to prevent render-time updates
             set({ 
               isRefreshing: true,
@@ -349,13 +395,27 @@ export const useAuthStore = create<AuthState>()(
             });
             
             const apiStore = useApiStore.getState();
+            console.log('📡 AUTH: Making refresh API call to /auth/refresh');
             const response = await apiStore.post<BaseApiResponse<AuthResult>>('/auth/refresh', {
               refreshToken
+            });
+            
+            console.log('📡 AUTH: Refresh API response:', {
+              success: response.success,
+              hasData: !!response.data,
+              message: response.message
             });
             
             if (response.success && response.data) {
               // The refresh response has tokens directly in data, not nested
               const tokens = response.data as any; // Cast since refresh has different structure
+              
+              console.log('✅ AUTH: Token refresh successful:', {
+                hasAccessToken: !!tokens.accessToken,
+                hasRefreshToken: !!tokens.refreshToken,
+                accessToken: tokens.accessToken?.substring(0, 20) + '...',
+                newRefreshToken: tokens.refreshToken?.substring(0, 20) + '...'
+              });
               
               // Batch all state updates together
               set({
@@ -366,13 +426,16 @@ export const useAuthStore = create<AuthState>()(
                 isRefreshing: false
               });
             } else {
+              console.log('❌ AUTH: Token refresh failed - invalid response:', response);
               throw new Error(response.message || 'Token refresh failed');
             }
           } catch (error) {
+            console.log('❌ AUTH: Token refresh error:', error);
             // If refresh fails, logout user
             get().logout();
             throw error;
           } finally {
+            console.log('🏁 AUTH: Token refresh finally block - resetting states');
             // Ensure loading states are reset
             set({ 
               isLoading: false,
@@ -402,6 +465,60 @@ export const useAuthStore = create<AuthState>()(
             throw error;
           } finally {
             setLoading(false);
+          }
+        },
+        
+        refreshUserData: async () => {
+          const { setLoading, setError, setUser, user } = get();
+          
+          if (!user) {
+            return; // No user to refresh
+          }
+          
+          try {
+            setLoading(true);
+            setError(null);
+            
+            const apiStore = useApiStore.getState();
+            const response = await apiStore.get<BaseApiResponse<User>>('/users/me');
+            
+            if (response.success && response.data) {
+              // Add timestamp when we fetched the data
+              const userWithTimestamp = {
+                ...response.data,
+                lastFetched: new Date().toISOString()
+              };
+              setUser(userWithTimestamp);
+            } else {
+              throw new Error(response.message || 'Failed to refresh user data');
+            }
+          } catch (error) {
+            const message = error instanceof Error ? error.message : 'Failed to refresh user data';
+            setError(message);
+            console.warn('Failed to refresh user data:', message);
+            // Don't throw error for refresh - it's a background operation
+          } finally {
+            setLoading(false);
+          }
+        },
+        
+        refreshUserDataIfStale: async () => {
+          const { user, refreshUserData } = get();
+          
+          if (!user) {
+            return; // No user to check
+          }
+          
+          // Check if data is stale (older than 5 minutes)
+          const STALENESS_THRESHOLD = 5 * 60 * 1000; // 5 minutes in milliseconds
+          const now = new Date().getTime();
+          const lastFetched = user.lastFetched ? new Date(user.lastFetched).getTime() : 0;
+          const isStale = now - lastFetched > STALENESS_THRESHOLD;
+          
+          // Only refresh if data is stale or if we've never fetched it
+          if (isStale || !user.lastFetched) {
+            console.log('User data is stale, refreshing...');
+            await refreshUserData();
           }
         },
         
@@ -521,6 +638,8 @@ export const useProfile = () => {
     isLoading: authStore.isLoading,
     error: authStore.error,
     updateProfile: authStore.updateProfile,
+    refreshUserData: authStore.refreshUserData,
+    refreshUserDataIfStale: authStore.refreshUserDataIfStale,
     changePassword: authStore.changePassword,
     clearError: authStore.clearError,
   };

@@ -11,6 +11,7 @@ import {
   ButtonText,
 } from "@/components/ui";
 import { useTheme } from "@/providers/ThemeContext";
+import { ProfileCompletionBanner } from "@/components/ProfileCompletionBanner";
 
 interface Post {
   id: string;
@@ -270,6 +271,9 @@ export default function HomeScreen() {
               </HStack>
             </VStack>
           </Box>
+
+          {/* Profile Completion Reminder (only if incomplete) */}
+          <ProfileCompletionBanner variant="home" />
 
           {/* Feed Filters */}
           <Box className="px-4">

@@ -29,6 +29,7 @@ import { PostTag } from './shared/entities/post-tag.entity';
 import { PostMedia } from './shared/entities/post-media.entity';
 import { UserProfile } from './shared/entities/user-profile.entity';
 import { UserPreferences } from './shared/entities/user-preferences.entity';
+import { UserStats } from './shared/entities/user-stats.entity';
 import { UserFollow } from './shared/entities/user-follow.entity';
 import { UserBlock } from './shared/entities/user-block.entity';
 
@@ -81,6 +82,7 @@ import { UserModule } from './modules/users/user.module';
             PostMedia,
             UserProfile,
             UserPreferences,
+            UserStats,
             UserFollow,
             UserBlock,
           ],

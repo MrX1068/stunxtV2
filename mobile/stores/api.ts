@@ -79,12 +79,20 @@ interface ApiState {
 
 export const useApiStore = create<ApiState>()(
   devtools(
-    (set, get) => ({
-      // Initial state
-      isLoading: false,
-      error: null,
-      requestCount: 0,
-      isRefreshingToken: false,
+    (set, get) => {
+      // Request queue for token refresh
+      const refreshQueue: Array<{
+        resolve: (value: any) => void;
+        reject: (reason?: any) => void;
+        request: () => Promise<any>;
+      }> = [];
+
+      return {
+        // Initial state
+        isLoading: false,
+        error: null,
+        requestCount: 0,
+        isRefreshingToken: false,
       
       // Actions
       setLoading: (loading) => set({ isLoading: loading }),
@@ -142,7 +150,7 @@ export const useApiStore = create<ApiState>()(
       
       // Private method for making requests
       makeRequest: async <T = any>(endpoint: string, options: RequestInit = {}): Promise<T> => {
-        const { incrementRequest, decrementRequest, setError, isRefreshingToken } = get();
+        const { incrementRequest, decrementRequest, setError } = get();
         
         try {
           incrementRequest();
@@ -167,6 +175,7 @@ export const useApiStore = create<ApiState>()(
           if (token) {
             defaultHeaders.Authorization = `Bearer ${token}`;
           }
+          console.log("fetch url =>>>>>>>>>>>", url)
           // Debug log removed: url
           const response = await fetch(url, {
             ...options,
@@ -176,18 +185,88 @@ export const useApiStore = create<ApiState>()(
             },
           });
           // Removed debug log for response to clean up production code
+          console.log("response =>>>>>>>>> ", response)
           // Handle token expiry with automatic refresh
           // For logout endpoint: try refresh once to enable proper server-side cleanup
           // For other endpoints: normal refresh behavior
-          if (response.status === 401 && token && !isRefreshingToken && endpoint !== '/auth/refresh') {
+          if (response.status === 401 && token && endpoint !== '/auth/refresh') {
+            const { isRefreshingToken } = get(); // Check current refresh state
+            console.log('🔄 API: 401 detected:', {
+              endpoint,
+              timestamp: new Date().toISOString(),
+              currentToken: token?.substring(0, 20) + '...',
+              refreshInProgress: isRefreshingToken
+            });
+
+            // If refresh is already in progress, queue this request
+            if (isRefreshingToken) {
+              console.log('📋 API: Queueing request (refresh in progress):', endpoint);
+              return new Promise((resolve, reject) => {
+                refreshQueue.push({
+                  resolve,
+                  reject,
+                  request: async () => {
+                    const newToken = useAuthStore.getState().token;
+                    if (newToken) {
+                      const retryHeaders = {
+                        ...defaultHeaders,
+                        Authorization: `Bearer ${newToken}`,
+                        ...options.headers,
+                      };
+                      
+                      const retryResponse = await fetch(url, {
+                        ...options,
+                        headers: retryHeaders,
+                      });
+                      
+                      if (retryResponse.ok) {
+                        return await retryResponse.json();
+                      } else {
+                        throw new Error(`Request failed: ${retryResponse.status}`);
+                      }
+                    } else {
+                      throw new Error('No token after refresh');
+                    }
+                  }
+                });
+              });
+            }
+
+            // First request that gets 401 - start the refresh process
+            console.log('🚀 API: Starting token refresh process for:', endpoint);
             try {
               set({ isRefreshingToken: true });
               
-              // Try to refresh the token
-              await authState.refreshAuth();
+              // Try to refresh the token - get fresh auth state
+              console.log('🔄 API: Calling refreshAuth()...');
+              const currentAuthState = useAuthStore.getState();
+              await currentAuthState.refreshAuth();
+              console.log('✅ API: Token refresh completed');
+              
+              // Process queued requests
+              const queuedRequests = [...refreshQueue];
+              refreshQueue.length = 0; // Clear the queue
+              
+              console.log('📤 API: Processing queued requests:', queuedRequests.length);
+              
+              // Process all queued requests
+              queuedRequests.forEach(async ({ resolve, reject, request }) => {
+                try {
+                  const result = await request();
+                  resolve(result);
+                } catch (error) {
+                  reject(error);
+                }
+              });
               
               // Retry the original request with new token
               const newToken = useAuthStore.getState().token;
+              console.log('🔄 API: Retrying original request with new token:', {
+                endpoint,
+                hasNewToken: !!newToken,
+                newToken: newToken?.substring(0, 20) + '...'
+              });
+              
               if (newToken) {
                 const retryHeaders = {
                   ...defaultHeaders,
@@ -200,8 +279,15 @@ export const useApiStore = create<ApiState>()(
                   headers: retryHeaders,
                 });
                 
+                console.log('🔄 API: Retry response:', {
+                  endpoint,
+                  status: retryResponse.status,
+                  ok: retryResponse.ok
+                });
+                
                 if (retryResponse.ok) {
                   const data = await retryResponse.json();
+                  console.log('✅ API: Retry successful for:', endpoint);
                   return data as T;
                 }
                 
@@ -212,6 +298,7 @@ export const useApiStore = create<ApiState>()(
                 }
               }
             } catch (refreshError) {
+              console.log('❌ API: Token refresh failed:', refreshError);
               // If refresh fails, the auth store will handle logout
               console.log('Token refresh failed:', refreshError);
               
@@ -246,6 +333,7 @@ export const useApiStore = create<ApiState>()(
           }
           
           const data = await response.json();
+          console.log("fetchd parse data =>>>>>>>>>>>>>>>", data)
           return data as T;
           
         } catch (error) {
@@ -256,7 +344,8 @@ export const useApiStore = create<ApiState>()(
           decrementRequest();
         }
       },
-    }),
+    };
+  },
     {
       name: 'api-store',
     }

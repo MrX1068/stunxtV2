@@ -17,6 +17,8 @@ import { Inject } from '@nestjs/common';
 import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { MessageService } from './message.service';
 import { ConversationService } from './conversation.service';
+import { MessageType } from '../shared/entities/message.entity';
+import { EventEmitter2 } from '@nestjs/event-emitter';
 
 interface AuthenticatedSocket extends Socket {
   userId?: string;
@@ -41,7 +43,7 @@ interface OnlineUserData {
 @Injectable()
 @WebSocketGateway({
   cors: {
-    origin: ['http://localhost:3000', 'http://localhost:3001'], // Configure for your frontend
+    origin: true, // Allow all origins for development
     methods: ['GET', 'POST'],
     credentials: true,
   },
@@ -60,30 +62,56 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
     private jwtService: JwtService,
     private messageService: MessageService,
     private conversationService: ConversationService,
+    private eventEmitter: EventEmitter2,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
   ) {}
 
   afterInit(server: Server) {
-    this.logger.log('WebSocket Gateway initialized');
+    this.logger.log('🚀 WebSocket Gateway initialized on /messaging namespace');
+    console.log('🌐 WebSocket server ready to accept connections at /messaging');
   }
 
   async handleConnection(client: AuthenticatedSocket, ...args: any[]) {
+    const connectionStart = Date.now();
+    console.log('🔌 New WebSocket connection attempt:', {
+      socketId: client.id,
+      namespace: client.nsp.name,
+      origin: client.handshake.headers.origin,
+      timestamp: new Date().toISOString()
+    });
+
     try {
-      // Extract token from handshake
+      // Extract token from handshake (optimized)
       const token = client.handshake.auth?.token || client.handshake.headers?.authorization?.replace('Bearer ', '');
       
       if (!token) {
-        this.logger.warn(`Connection rejected: No token provided`);
+        console.log('❌ Connection rejected: No token provided');
         client.disconnect();
         return;
       }
 
-      // Verify JWT token
-      const payload = await this.jwtService.verifyAsync(token);
+      // Fast JWT token verification with caching
+      console.log('🔐 JWT token verification starting...');
+      const tokenCacheKey = `jwt_verification:${token.slice(-10)}`;
+      let payload = await this.cacheManager.get<any>(tokenCacheKey);
+      
+      if (!payload) {
+        payload = await this.jwtService.verifyAsync(token);
+        // Cache the verified payload for 5 minutes to speed up subsequent connections
+        await this.cacheManager.set(tokenCacheKey, payload, 300000);
+      }
+      
+      console.log('✅ JWT verification successful:', {
+        userId: payload.sub,
+        username: payload.username,
+        cached: !!payload,
+        verificationTime: Date.now() - connectionStart
+      });
+      
       client.userId = payload.sub;
       client.user = payload;
 
-      // Track connected user
+      // Track connected user (optimized)
       if (!this.connectedUsers.has(client.userId)) {
         this.connectedUsers.set(client.userId, new Set());
       }
@@ -92,19 +120,34 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
       // Initialize user rooms
       this.userRooms.set(client.id, new Set());
 
-      // Update user online status
-      await this.updateUserOnlineStatus(client.userId, 'online');
+      // Parallel execution of status updates and room joining for faster connection
+      const connectionPromises = [
+        this.updateUserOnlineStatus(client.userId, 'online'),
+        this.autoJoinUserConversations(client)
+      ];
 
-      // Auto-join user's conversations
-      await this.autoJoinUserConversations(client);
+      await Promise.all(connectionPromises);
 
-      this.logger.log(`User ${client.userId} connected with socket ${client.id}`);
+      const totalConnectionTime = Date.now() - connectionStart;
+      this.logger.log(`✅ WebSocket: User ${client.userId} connected in ${totalConnectionTime}ms`);
+      console.log(`🔌 WebSocket Connection Success: User ${client.userId} is now online (${totalConnectionTime}ms)`);
 
-      // Emit online status to contacts
-      this.emitUserOnlineStatus(client.userId, 'online');
+      // Emit connection success immediately to frontend
+      client.emit('connection_success', {
+        userId: client.userId,
+        socketId: client.id,
+        connectionTime: totalConnectionTime,
+        timestamp: new Date().toISOString()
+      });
+
+      // Emit online status to contacts (non-blocking)
+      setImmediate(() => this.emitUserOnlineStatus(client.userId, 'online'));
 
     } catch (error) {
+      const connectionTime = Date.now() - connectionStart;
+      console.error(`❌ Connection failed in ${connectionTime}ms:`, error.message);
       this.logger.error(`Connection authentication failed: ${error.message}`);
+      client.emit('connection_error', { error: error.message, connectionTime });
       client.disconnect();
     }
   }
@@ -143,7 +186,29 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
     try {
       const { conversationId } = data;
       
-      // Verify user has access to conversation
+      console.log('🔵 [MessagingGateway] Join conversation request:', {
+        conversationId,
+        userId: client.userId,
+        isSpaceConversation: conversationId.startsWith('space-') || conversationId.startsWith('conv_')
+      });
+      
+      // Handle space conversations differently
+      if (conversationId.startsWith('space-') || conversationId.startsWith('conv_')) {
+        // For space conversations, just join the room without UUID validation
+        await client.join(conversationId);
+        
+        // Track room membership
+        this.userRooms.get(client.id)?.add(conversationId);
+
+        client.emit('joined_conversation', { conversationId });
+        console.log('✅ [MessagingGateway] User joined space conversation:', {
+          userId: client.userId,
+          conversationId
+        });
+        return;
+      }
+      
+      // For regular conversations, verify user has access
       const hasAccess = await this.conversationService.hasUserAccess(conversationId, client.userId);
       if (!hasAccess) {
         client.emit('error', { message: 'Access denied to conversation' });
@@ -265,6 +330,133 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
       });
     } catch (error) {
       client.emit('error', { message: 'Failed to get online users' });
+    }
+  }
+
+  @SubscribeMessage('send_message')
+  async handleSendMessage(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: {
+      conversationId: string;
+      content: string;
+      type?: string;
+      optimisticId?: string;
+      replyTo?: string;
+      attachments?: any[];
+    },
+  ) {
+    console.log('🚀 [WebSocket Gateway] send_message event received:', {
+      userId: client.userId,
+      conversationId: data.conversationId,
+      content: data.content?.substring(0, 100),
+      optimisticId: data.optimisticId,
+      type: data.type || 'text',
+      timestamp: new Date().toISOString()
+    });
+
+    try {
+      // Validate input data
+      if (!data.conversationId || !data.content?.trim()) {
+        console.error('❌ [WebSocket Gateway] Invalid message data:', data);
+        client.emit('message_error', {
+          optimisticId: data.optimisticId,
+          error: 'Invalid message data: missing conversationId or content',
+          success: false,
+        });
+        return;
+      }
+
+      // Check if conversation exists or is a space conversation
+      const isSpaceConversation = data.conversationId.startsWith('space-');
+      console.log('🔍 [WebSocket Gateway] Conversation type check:', {
+        conversationId: data.conversationId,
+        isSpaceConversation,
+        userId: client.userId
+      });
+
+      // Create the message DTO
+      const messageDto = {
+        conversationId: data.conversationId,
+        content: data.content.trim(),
+        type: (data.type as MessageType) || MessageType.TEXT,
+        replyToId: data.replyTo,
+        attachments: data.attachments || [],
+      };
+
+      console.log('📦 [WebSocket Gateway] Prepared message DTO:', messageDto);
+
+      // Send message through service with detailed logging
+      console.log('💾 [WebSocket Gateway] Calling messageService.sendMessage...');
+      const result = await this.messageService.sendMessage(
+        client.userId,
+        messageDto,
+        data.optimisticId
+      );
+
+      console.log('✅ [WebSocket Gateway] MessageService response:', {
+        messageId: result.message?.id,
+        optimisticId: data.optimisticId,
+        participants: result.participants?.length,
+        hasUnreadCounts: !!result.unreadCounts
+      });
+
+      // Emit immediate confirmation back to sender
+      client.emit('message_sent', {
+        optimisticId: data.optimisticId,
+        message: result.message,
+        success: true,
+        timestamp: new Date().toISOString(),
+      });
+
+      console.log('📤 [WebSocket Gateway] Sent confirmation to sender:', client.userId);
+
+      // Broadcast to conversation participants
+      const roomName = `conversation:${data.conversationId}`;
+      const broadcastData = {
+        message: result.message,
+        conversationId: data.conversationId,
+        timestamp: new Date().toISOString(),
+      };
+
+      client.to(roomName).emit('new_message', broadcastData);
+      console.log('📢 [WebSocket Gateway] Broadcasted to room:', {
+        roomName,
+        messageId: result.message?.id,
+        participantCount: result.participants?.length
+      });
+
+      // Also emit the message.sent event for additional listeners
+      this.eventEmitter.emit('message.sent', {
+        message: result.message,
+        conversationId: data.conversationId,
+        senderId: client.userId,
+        participants: result.participants,
+        timestamp: new Date().toISOString(),
+      });
+
+      console.log('🎯 [WebSocket Gateway] Emitted message.sent event for additional processing');
+
+    } catch (error) {
+      console.error('❌ [WebSocket Gateway] send_message error:', {
+        error: error.message,
+        stack: error.stack,
+        userId: client.userId,
+        conversationId: data.conversationId,
+        optimisticId: data.optimisticId,
+        timestamp: new Date().toISOString()
+      });
+
+      this.logger.error(`WebSocket send_message error: ${error.message}`, error.stack);
+
+      // Emit error back to sender with detailed info
+      client.emit('message_error', {
+        optimisticId: data.optimisticId,
+        error: error.message,
+        success: false,
+        timestamp: new Date().toISOString(),
+      });
+
+      console.log('📤 [WebSocket Gateway] Sent error response to sender:', client.userId);
     }
   }
 

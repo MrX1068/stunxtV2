@@ -6,8 +6,8 @@ export const databaseConfig = () => {
     logging: process.env.DATABASE_LOGGING === 'true',
     autoLoadEntities: true,
     retryAttempts: parseInt(process.env.DATABASE_RETRY_ATTEMPTS || '3', 10),
-    retryDelay: parseInt(process.env.DATABASE_RETRY_DELAY || '3000', 10),
-    maxQueryExecutionTime: parseInt(process.env.DATABASE_MAX_QUERY_TIME || '5000', 10),
+    retryDelay: parseInt(process.env.DATABASE_RETRY_DELAY || '1000', 10), // Reduced from 3000ms
+    maxQueryExecutionTime: parseInt(process.env.DATABASE_MAX_QUERY_TIME || '2000', 10), // Reduced from 5000ms for faster timeouts
   };
 
   if (databaseType === 'sqlite') {
@@ -20,7 +20,7 @@ export const databaseConfig = () => {
     };
   }
 
-  // PostgreSQL configuration
+  // PostgreSQL configuration optimized for real-time messaging
   return {
     database: {
       type: 'postgres' as const,
@@ -32,9 +32,20 @@ export const databaseConfig = () => {
       ssl: process.env.DATABASE_SSL === 'true',
       ...baseConfig,
       extra: {
-        connectionLimit: parseInt(process.env.DATABASE_CONNECTION_LIMIT || '10', 10),
-        acquireTimeout: parseInt(process.env.DATABASE_ACQUIRE_TIMEOUT || '60000', 10),
-        timeout: parseInt(process.env.DATABASE_TIMEOUT || '60000', 10),
+        // Optimized connection pool settings for real-time messaging
+        connectionLimit: parseInt(process.env.DATABASE_CONNECTION_LIMIT || '20', 10), // Increased from 10
+        acquireTimeout: parseInt(process.env.DATABASE_ACQUIRE_TIMEOUT || '30000', 10), // Reduced from 60000ms 
+        timeout: parseInt(process.env.DATABASE_TIMEOUT || '20000', 10), // Reduced from 60000ms
+        idleTimeout: parseInt(process.env.DATABASE_IDLE_TIMEOUT || '10000', 10), // Add idle timeout
+        // PostgreSQL specific optimizations
+        max: parseInt(process.env.DATABASE_MAX_CONNECTIONS || '20', 10),
+        min: parseInt(process.env.DATABASE_MIN_CONNECTIONS || '5', 10),
+        // Connection pool configuration for better performance
+        statement_timeout: parseInt(process.env.DATABASE_STATEMENT_TIMEOUT || '15000', 10), // 15s statement timeout
+        query_timeout: parseInt(process.env.DATABASE_QUERY_TIMEOUT || '10000', 10), // 10s query timeout
+        // Enable connection keep-alive
+        keepAlive: true,
+        keepAliveInitialDelayMillis: 0,
       },
     },
   };

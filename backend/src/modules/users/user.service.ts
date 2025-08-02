@@ -8,17 +8,17 @@ import * as bcrypt from 'bcrypt';
 import { User, UserStatus, UserRole, AuthProvider } from '../../shared/entities/user.entity';
 import { UserProfile } from '../../shared/entities/user-profile.entity';
 import { UserPreferences } from '../../shared/entities/user-preferences.entity';
+import { UserStats as UserStatsEntity } from '../../shared/entities/user-stats.entity';
 import { UserFollow } from '../../shared/entities/user-follow.entity';
 import { UserBlock } from '../../shared/entities/user-block.entity';
 import { UserSession } from '../../shared/entities/user-session.entity';
+import { ImageTransformService } from '../../shared/services/image-transform.service';
 
 export interface CreateUserDto {
   username: string;
   email: string;
   password: string;
-  displayName?: string;
-  firstName?: string;
-  lastName?: string;
+  fullName: string;
   dateOfBirth?: Date;
   acceptedTerms: boolean;
   acceptedPrivacy: boolean;
@@ -26,15 +26,12 @@ export interface CreateUserDto {
 }
 
 export interface UpdateUserDto {
-  displayName?: string;
-  firstName?: string;
-  lastName?: string;
   bio?: string;
   location?: string;
   website?: string;
-  websiteUrl?: string; // Add this for frontend compatibility
-  avatarUrl?: string; // Add this for avatar uploads
-  bannerUrl?: string; // Add this for banner uploads
+  websiteUrl?: string; // Alias for website field
+  avatarUrl?: string;
+  bannerUrl?: string;
   dateOfBirth?: Date;
   phoneNumber?: string;
   isPublic?: boolean;
@@ -116,6 +113,8 @@ export class UserService {
     private readonly profileRepository: Repository<UserProfile>,
     @InjectRepository(UserPreferences)
     private readonly preferencesRepository: Repository<UserPreferences>,
+    @InjectRepository(UserStatsEntity)
+    private readonly statsRepository: Repository<UserStatsEntity>,
     @InjectRepository(UserFollow)
     private readonly followRepository: Repository<UserFollow>,
     @InjectRepository(UserBlock)
@@ -126,6 +125,7 @@ export class UserService {
     private readonly eventEmitter: EventEmitter2,
     @Inject(CACHE_MANAGER)
     private readonly cacheManager: Cache,
+    private readonly imageTransformService: ImageTransformService,
   ) {}
 
   // Create new user with profile and preferences
@@ -146,7 +146,7 @@ export class UserService {
         username: createUserDto.username.toLowerCase().trim(),
         email: createUserDto.email.toLowerCase().trim(),
         passwordHash: hashedPassword,
-        fullName: createUserDto.displayName || createUserDto.username,
+        fullName: createUserDto.fullName,
         role: UserRole.USER,
         status: UserStatus.ACTIVE,
         authProvider: AuthProvider.LOCAL,
@@ -158,8 +158,6 @@ export class UserService {
       // Create user profile
       const profile = this.profileRepository.create({
         userId: savedUser.id,
-        firstName: createUserDto.firstName,
-        lastName: createUserDto.lastName,
         dateOfBirth: createUserDto.dateOfBirth,
         isPublic: true,
         allowFollowers: true,
@@ -237,37 +235,11 @@ export class UserService {
       return user;
     }
 
-    // Query from database with relations
-    const queryBuilder = this.userRepository
-      .createQueryBuilder('user')
-      .leftJoinAndSelect('user.profile', 'profile')
-      .leftJoinAndSelect('user.userPreferences', 'userPreferences')
-      .where('user.id = :userId', { userId });
-
-    // Include private data only if requested and authorized
-    if (!includePrivate) {
-      queryBuilder.select([
-        'user.id',
-        'user.username',
-        'user.fullName',
-        'user.avatarUrl',
-        'user.bannerUrl',
-        'user.emailVerified',
-        'user.role',
-        'user.status',
-        'user.createdAt',
-        'user.lastActiveAt',
-        'profile.firstName',
-        'profile.lastName',
-        'profile.bio',
-        'profile.location',
-        'profile.website',
-        'profile.isPublic',
-        'profile.allowFollowers',
-      ]);
-    }
-
-    user = await queryBuilder.getOne();
+    // Query from database - relations are eager loaded automatically
+    user = await this.userRepository.findOne({
+      where: { id: userId },
+      // Relations (profile, preferences, stats) are loaded via eager: true
+    });
     
     if (!user) {
       throw new NotFoundException('User not found');
@@ -276,9 +248,26 @@ export class UserService {
     // Update last seen
     this.updateLastActiveAt(userId);
 
-    // Cache the result
-    await this.cacheManager.set(cacheKey, user, includePrivate ? 300 : 600); // Private data cached for 5 min, public for 10 min
+    // Cache the result with appropriate TTL
+    await this.cacheManager.set(cacheKey, user, includePrivate ? 300 : 600); // Private: 5min, Public: 10min
 
+    // Enhance with optimized avatar URLs
+    return this.enhanceUserWithOptimizedImages(user);
+  }
+
+  /**
+   * Enhance user data with optimized image URLs
+   */
+  private enhanceUserWithOptimizedImages(user: User): User {
+    if (!user.avatarUrl) return user;
+
+    const avatarSizes = this.imageTransformService.getAvatarSizes(user.avatarUrl);
+    
+    // Add avatarSizes to user object (TypeScript will allow this at runtime)
+    (user as any).avatarSizes = avatarSizes;
+    
+    // Note: isOnboardingComplete is already available as a getter on the User entity
+    
     return user;
   }
 
@@ -307,65 +296,157 @@ export class UserService {
     return user;
   }
 
-  // Update user profile
+  // Update user profile - SIMPLIFIED VERSION
   async updateUser(userId: string, updateUserDto: UpdateUserDto): Promise<User> {
-    const user = await this.getUserById(userId, true);
-    
-    // Update user profile
-    if (user.profile) {
-      Object.assign(user.profile, updateUserDto);
-      await this.profileRepository.save(user.profile);
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+
+    try {
+      const user = await this.getUserById(userId, true);
+      
+      // Update User entity fields (avatarUrl, bannerUrl)
+      if (updateUserDto.avatarUrl !== undefined || updateUserDto.bannerUrl !== undefined) {
+        await queryRunner.manager.update(User, userId, {
+          ...(updateUserDto.avatarUrl !== undefined && { avatarUrl: updateUserDto.avatarUrl }),
+          ...(updateUserDto.bannerUrl !== undefined && { bannerUrl: updateUserDto.bannerUrl }),
+        });
+      }
+
+      // Update UserProfile entity fields
+      let profile = await this.profileRepository.findOne({ where: { userId } });
+      if (!profile) {
+        profile = this.profileRepository.create({ userId });
+      }
+
+      // Map websiteUrl to website field for consistency
+      const website = updateUserDto.websiteUrl || updateUserDto.website;
+      
+      // Use TypeORM's save() - it handles the field mapping automatically
+      Object.assign(profile, {
+        ...(updateUserDto.bio !== undefined && { bio: updateUserDto.bio }),
+        ...(updateUserDto.location !== undefined && { location: updateUserDto.location }),
+        ...(website !== undefined && { website }),
+        ...(updateUserDto.dateOfBirth !== undefined && { dateOfBirth: updateUserDto.dateOfBirth }),
+        ...(updateUserDto.phoneNumber !== undefined && { phoneNumber: updateUserDto.phoneNumber }),
+        ...(updateUserDto.isPublic !== undefined && { isPublic: updateUserDto.isPublic }),
+        ...(updateUserDto.allowFollowers !== undefined && { allowFollowers: updateUserDto.allowFollowers }),
+        ...(updateUserDto.allowDirectMessages !== undefined && { allowDirectMessages: updateUserDto.allowDirectMessages }),
+      });
+
+      await queryRunner.manager.save(UserProfile, profile);
+
+      // Auto-complete onboarding if requirements are met
+      const hasProfile = !!(profile.bio || profile.location);
+      if (hasProfile) {
+        const preferences = await this.preferencesRepository.findOne({ where: { userId } });
+        const hasInterests = preferences?.metadata?.interests?.length >= 3;
+        const hasBasicInfo = !!(user.fullName && user.username && user.emailVerified);
+        
+        if (hasBasicInfo && hasProfile && hasInterests && preferences && !preferences.metadata?.onboardingCompleted) {
+          preferences.metadata = { ...preferences.metadata, onboardingCompleted: true };
+          await queryRunner.manager.save(UserPreferences, preferences);
+          
+          // Create initial user stats
+          const existingStats = await this.statsRepository.findOne({ where: { userId } });
+          if (!existingStats) {
+            const stats = this.statsRepository.create({ userId });
+            await queryRunner.manager.save(UserStatsEntity, stats);
+          }
+        }
+      }
+
+      await queryRunner.commitTransaction();
+
+      // Clear caches and emit event
+      await this.clearUserCaches(userId);
+      this.eventEmitter.emit('user.updated', { userId, changes: updateUserDto });
+
+      return await this.getUserById(userId);
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
     }
-
-    // Clear caches
-    await this.clearUserCaches(userId);
-
-    // Emit event
-    this.eventEmitter.emit('user.updated', {
-      userId,
-      changes: updateUserDto,
-    });
-
-    return await this.getUserById(userId);
   }
 
-  // Update user preferences
+  // Update user preferences with onboarding completion logic
   async updatePreferences(userId: string, preferencesDto: UpdateUserPreferencesDto): Promise<UserPreferences> {
-    let preferences = await this.preferencesRepository.findOne({ where: { userId } });
-    
-    if (!preferences) {
-      preferences = this.preferencesRepository.create({ userId });
-    }
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
 
-    // Deep merge preferences
-    Object.assign(preferences, preferencesDto);
-    
-    // Handle nested objects
-    if (preferencesDto.notificationTypes) {
-      preferences.notificationTypes = { ...preferences.notificationTypes, ...preferencesDto.notificationTypes };
-    }
-    if (preferencesDto.privacySettings) {
-      preferences.privacySettings = { ...preferences.privacySettings, ...preferencesDto.privacySettings };
-    }
-    if (preferencesDto.contentPreferences) {
-      preferences.contentPreferences = { ...preferences.contentPreferences, ...preferencesDto.contentPreferences };
-    }
-    if (preferencesDto.metadata) {
-      preferences.metadata = { ...preferences.metadata, ...preferencesDto.metadata };
-    }
+    try {
+      let preferences = await this.preferencesRepository.findOne({ where: { userId } });
+      
+      if (!preferences) {
+        preferences = this.preferencesRepository.create({ userId });
+      }
 
-    const savedPreferences = await this.preferencesRepository.save(preferences);
+      // Deep merge preferences
+      Object.assign(preferences, preferencesDto);
+      
+      // Handle nested objects
+      if (preferencesDto.notificationTypes) {
+        preferences.notificationTypes = { ...preferences.notificationTypes, ...preferencesDto.notificationTypes };
+      }
+      if (preferencesDto.privacySettings) {
+        preferences.privacySettings = { ...preferences.privacySettings, ...preferencesDto.privacySettings };
+      }
+      if (preferencesDto.contentPreferences) {
+        preferences.contentPreferences = { ...preferences.contentPreferences, ...preferencesDto.contentPreferences };
+      }
+      if (preferencesDto.metadata) {
+        preferences.metadata = { ...preferences.metadata, ...preferencesDto.metadata };
+        
+        // SECURITY: Backend determines onboarding completion
+        // If interests are being set and we have at least 3, check if onboarding should be completed
+        if (preferencesDto.metadata.interests && Array.isArray(preferencesDto.metadata.interests)) {
+          const user = await this.getUserById(userId, true);
+          
+          if (preferencesDto.metadata.interests.length >= 3) {
+            // Check if onboarding requirements are met
+            const hasBasicInfo = !!(user.fullName && user.username && user.emailVerified);
+            const hasProfile = !!(user.profile?.bio || user.profile?.location);
+            const hasInterests = preferencesDto.metadata.interests.length >= 3;
+            
+            if (hasBasicInfo && hasProfile && hasInterests) {
+              // Backend automatically sets onboarding as complete
+              preferences.metadata.onboardingCompleted = true;
+              
+              // Create initial user stats if they don't exist
+              let stats = await this.statsRepository.findOne({ where: { userId } });
+              if (!stats) {
+                stats = this.statsRepository.create({ userId });
+                await queryRunner.manager.save(UserStatsEntity, stats);
+              }
+            }
+          }
+        }
+      }
 
-    // Clear user cache
-    await this.clearUserCaches(userId);
+      const savedPreferences = await queryRunner.manager.save(UserPreferences, preferences);
 
-    // Emit event
-    this.eventEmitter.emit('user.preferences.updated', {
-      userId,
-      preferences: savedPreferences,
-    });
+      await queryRunner.commitTransaction();
 
-    return savedPreferences;
+      // Clear user cache
+      await this.clearUserCaches(userId);
+
+      // Emit event
+      this.eventEmitter.emit('user.preferences.updated', {
+        userId,
+        preferences: savedPreferences,
+        onboardingCompleted: savedPreferences.metadata?.onboardingCompleted === true,
+      });
+
+      return savedPreferences;
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
   }
 
   // Follow/unfollow user
@@ -583,7 +664,7 @@ export class UserService {
     // Apply search query
     if (options.query) {
       queryBuilder.andWhere(
-        '(user.username ILIKE :query OR user.fullName ILIKE :query OR profile.firstName ILIKE :query OR profile.lastName ILIKE :query)',
+        '(user.username ILIKE :query OR user.fullName ILIKE :query OR profile.bio ILIKE :query)',
         { query: `%${options.query}%` }
       );
     }
@@ -629,8 +710,6 @@ export class UserService {
       'user.emailVerified',
       'user.createdAt',
       'user.lastActiveAt',
-      'profile.firstName',
-      'profile.lastName',
       'profile.bio',
       'profile.location',
       'profile.isPublic',

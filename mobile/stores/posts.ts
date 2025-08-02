@@ -11,8 +11,7 @@ export interface Post {
   authorId: string;
   author: {
     id: string;
-    firstName: string;
-    lastName: string;
+    fullName: string;
     avatar?: string;
   };
   categoryId: string;
@@ -116,6 +115,7 @@ export interface CreateSpaceData {
   description?: string;
   communityId: string;
   type: 'public' | 'private' | 'secret';
+  interactionType?: 'post' | 'chat' | 'forum' | 'feed';
   category: 'general' | 'announcements' | 'discussion' | 'projects' | 'support' | 'social' | 'gaming' | 'tech' | 'creative' | 'education' | 'business' | 'entertainment' | 'sports' | 'news' | 'other';
   avatarUrl?: string;
   bannerUrl?: string;
@@ -131,6 +131,70 @@ export interface CreatePostData {
   tags: string[];
   status: 'draft' | 'published';
   featuredImage?: string;
+}
+
+export interface CreateSpacePostData {
+  title: string;
+  content: string;
+  type?: 'text' | 'image' | 'video' | 'link' | 'poll' | 'event' | 'document';
+  // Media attachments
+  images?: {
+    url: string;
+    caption?: string;
+    alt?: string;
+  }[];
+  videos?: {
+    url: string;
+    thumbnail?: string;
+    caption?: string;
+    duration?: number;
+  }[];
+  documents?: {
+    url: string;
+    name: string;
+    size: number;
+    type: string;
+  }[];
+  // Link preview
+  linkPreview?: {
+    url: string;
+    title?: string;
+    description?: string;
+    image?: string;
+    domain?: string;
+  };
+  // Poll data
+  poll?: {
+    question: string;
+    options: string[];
+    allowMultiple?: boolean;
+    expiresAt?: string;
+  };
+  // Event data
+  event?: {
+    title: string;
+    description?: string;
+    startTime: string;
+    endTime?: string;
+    location?: string;
+    isOnline?: boolean;
+    meetingLink?: string;
+  };
+  // Formatting options
+  formatting?: {
+    isBold?: boolean;
+    isItalic?: boolean;
+    hasCodeBlock?: boolean;
+    hasMentions?: boolean;
+    hasHashtags?: boolean;
+  };
+  // Privacy and interaction settings
+  settings?: {
+    allowComments?: boolean;
+    allowReactions?: boolean;
+    isPinned?: boolean;
+    isAnnouncement?: boolean;
+  };
 }
 
 export interface PostFilters {
@@ -160,7 +224,9 @@ interface PostsState {
   spaces: Space[];
   communitySpaces: Record<string, Space[]>;
   currentSpace: Space | null;
+  spaceContent: Post[]; // Posts/messages for current space
   isLoadingSpaces: boolean;
+  isLoadingSpaceContent: boolean;
   spacesError: string | null;
   
   // Pagination
@@ -196,11 +262,17 @@ interface PostsState {
   fetchSpaces: (communityId?: string) => Promise<void>;
   fetchSpacesByCommunity: (communityId: string) => Promise<void>;
   fetchSpace: (id: string) => Promise<void>;
+  fetchSpaceContent: (spaceId: string, type?: 'posts' | 'messages') => Promise<void>;
+  createSpacePost: (spaceId: string, data: CreateSpacePostData) => Promise<void>;
   createSpace: (data: CreateSpaceData) => Promise<Space>;
   updateSpace: (id: string, data: Partial<CreateSpaceData>) => Promise<void>;
   deleteSpace: (id: string) => Promise<void>;
   joinSpace: (id: string) => Promise<void>;
   leaveSpace: (id: string) => Promise<void>;
+  
+  // Chat Actions
+  openSpaceChat: (spaceId: string, spaceName: string) => Promise<string>; // Returns conversationId
+  sendSpaceMessage: (spaceId: string, content: string, type?: 'text' | 'image' | 'file') => Promise<void>;
   
   // Utility actions
   clearErrors: () => void;
@@ -229,7 +301,9 @@ export const usePostsStore = create<PostsState>()(
       spaces: [],
       communitySpaces: {},
       currentSpace: null,
+      spaceContent: [],
       isLoadingSpaces: false,
+      isLoadingSpaceContent: false,
       spacesError: null,
       
       currentPage: 1,
@@ -699,24 +773,35 @@ export const usePostsStore = create<PostsState>()(
           
           const apiStore = useApiStore.getState();
           const url = communityId ? `/communities/${communityId}/spaces` : '/spaces';
-          const response = await apiStore.get<ApiResponse<Space[]>>(url);
+          console.log('🔍 Fetching spaces from URL:', url);
+          
+          const response = await apiStore.get<ApiResponse<{ spaces: Space[] }>>(url);
+          console.log('📦 Spaces API response:', { 
+            success: response.success, 
+            dataLength: response.data?.spaces?.length,
+            communityId 
+          });
           
           if (response.success && response.data) {
             if (communityId) {
               set(state => ({
                 communitySpaces: {
                   ...state.communitySpaces,
-                  [communityId]: response.data!
+                  [communityId]: response.data?.spaces!
                 }
               }));
+              console.log('✅ Updated communitySpaces for:', communityId, 'with', response.data?.spaces?.length, 'spaces');
             } else {
-              set({ spaces: response.data });
+              set({ spaces: response.data.spaces! });
+              console.log('✅ Updated global spaces with', response.data?.spaces?.length, 'spaces');
             }
           } else {
+            console.warn('❌ Spaces API failed:', response.message);
             throw new Error(response.message || 'Failed to fetch spaces');
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to fetch spaces';
+          console.error('💥 Fetch spaces error:', error);
           set({ spacesError: message });
         } finally {
           set({ isLoadingSpaces: false });
@@ -731,13 +816,35 @@ export const usePostsStore = create<PostsState>()(
         try {
           set({ isLoadingSpaces: true, spacesError: null });
           
-          const apiStore = useApiStore.getState();
-          const response = await apiStore.get<ApiResponse<Space>>(`/spaces/${id}`);
+          // First, try to find the space in our existing community spaces
+          const { spaces, communitySpaces } = get();
+          let existingSpace = spaces.find(space => space.id === id);
           
-          if (response.success && response.data) {
-            set({ currentSpace: response.data });
+          // If not found in main spaces, check community spaces
+          if (!existingSpace) {
+            for (const communityId of Object.keys(communitySpaces)) {
+              const communitySpaceList = communitySpaces[communityId];
+              existingSpace = communitySpaceList?.find(space => space.id === id);
+              if (existingSpace) break;
+            }
+          }
+
+          // If we found the space locally and it has communityId, use the proper endpoint
+          if (existingSpace?.communityId) {
+            const apiStore = useApiStore.getState();
+            const response = await apiStore.get<ApiResponse<Space>>(
+              `/communities/${existingSpace.communityId}/spaces/${id}`
+            );
+            
+            if (response.success && response.data) {
+              set({ currentSpace: response.data });
+            } else {
+              throw new Error(response.message || 'Failed to fetch space');
+            }
           } else {
-            throw new Error(response.message || 'Failed to fetch space');
+            // Fallback: if we don't have communityId, we need to find another way
+            // This shouldn't happen in normal flow, but just in case
+            throw new Error('Space not found in local data. Please navigate from community page.');
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to fetch space';
@@ -747,12 +854,138 @@ export const usePostsStore = create<PostsState>()(
         }
       },
 
+      fetchSpaceContent: async (spaceId: string, type: 'posts' | 'messages' = 'posts') => {
+        try {
+          set({ isLoadingSpaceContent: true, spacesError: null });
+          
+          const apiStore = useApiStore.getState();
+          const { currentSpace } = get();
+          
+          // We need the community ID for the correct endpoint
+          if (!currentSpace?.communityId) {
+            throw new Error('Community ID not found for space');
+          }
+          
+          let response;
+          
+          // Use the new secure space content endpoints with community context
+          if (type === 'posts') {
+            response = await apiStore.get<ApiResponse<any>>(
+              `/communities/${currentSpace.communityId}/spaces/${spaceId}/content?limit=50&type=posts`
+            );
+          } else {
+            // For messages, use the content endpoint with messages type
+            response = await apiStore.get<ApiResponse<any>>(
+              `/communities/${currentSpace.communityId}/spaces/${spaceId}/content?limit=50&type=messages`
+            );
+          }
+          
+          if (!response.success) {
+            throw new Error(response.message || 'Failed to fetch space content');
+          }
+
+          // 🔧 FIX: Handle the actual response structure from backend
+          console.log('📦 Space content response:', { 
+            success: response.success, 
+            hasData: !!response.data,
+            dataKeys: response.data ? Object.keys(response.data) : null,
+            postsCount: response.data?.posts?.length || 0,
+            messagesCount: response.data?.messages?.length || 0
+          });
+
+          // Backend returns { posts: [...], total: number } or { messages: [...], total: number }
+          if (type === 'posts' && response.data?.posts && Array.isArray(response.data.posts)) {
+            set({ spaceContent: response.data.posts });
+            console.log('✅ Set spaceContent with', response.data.posts.length, 'posts');
+          } else if (type === 'messages' && response.data?.messages && Array.isArray(response.data.messages)) {
+            set({ spaceContent: response.data.messages });
+            console.log('✅ Set spaceContent with', response.data.messages.length, 'messages');
+          } else {
+            console.warn('⚠️ Unexpected response structure, setting empty array');
+            console.warn('Response data:', response.data);
+            set({ spaceContent: [] });
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Failed to fetch space content';
+          console.error('💥 Fetch space content error:', error);
+          set({ spacesError: message });
+          // Set empty array on error to avoid showing dummy data
+          set({ spaceContent: [] });
+        } finally {
+          set({ isLoadingSpaceContent: false });
+        }
+      },
+
+      createSpacePost: async (spaceId: string, data: CreateSpacePostData) => {
+        try {
+          // Set loading state for post creation
+          set({ isLoadingSpaceContent: true, spacesError: null });
+          
+          const apiStore = useApiStore.getState();
+          const { currentSpace } = get();
+          
+          if (!currentSpace?.communityId) {
+            throw new Error('Community ID not found for space');
+          }
+
+          console.log('🚀 Creating space post:', { 
+            spaceId, 
+            title: data.title, 
+            type: data.type || 'text',
+            contentLength: data.content.length,
+            hasImages: !!data.images?.length,
+            hasVideos: !!data.videos?.length,
+            hasDocuments: !!data.documents?.length,
+            hasPoll: !!data.poll,
+            hasEvent: !!data.event,
+            hasLinkPreview: !!data.linkPreview
+          });
+
+          // Prepare the request payload
+          const payload = {
+            title: data.title,
+            content: data.content,
+            type: data.type || 'text',
+            // Include all rich media data
+            ...(data.images && { images: data.images }),
+            ...(data.videos && { videos: data.videos }),
+            ...(data.documents && { documents: data.documents }),
+            ...(data.linkPreview && { linkPreview: data.linkPreview }),
+            ...(data.poll && { poll: data.poll }),
+            ...(data.event && { event: data.event }),
+            ...(data.formatting && { formatting: data.formatting }),
+            ...(data.settings && { settings: data.settings }),
+          };
+
+          const response = await apiStore.post(
+            `/communities/${currentSpace.communityId}/spaces/${spaceId}/content`,
+            payload
+          );
+
+          if (response.success) {
+            console.log('✅ Rich media post created successfully, refreshing content...');
+            // Refresh space content to show the new post
+            await get().fetchSpaceContent(spaceId, 'posts');
+            console.log('✅ Content refreshed successfully');
+          } else {
+            throw new Error(response.message || 'Failed to create post');
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Failed to create post';
+          console.error('💥 Create space post error:', error);
+          set({ spacesError: message, isLoadingSpaceContent: false });
+          throw new Error(message);
+        }
+      },
+
       createSpace: async (data: CreateSpaceData) => {
         try {
           set({ isLoadingSpaces: true, spacesError: null });
           
           const apiStore = useApiStore.getState();
-          const response = await apiStore.post<ApiResponse<Space>>('/spaces', data);
+          // 🔧 FIX: Remove communityId from request body since it's in the URL path
+          const { communityId, ...requestData } = data;
+          const response = await apiStore.post<ApiResponse<Space>>(`/communities/${communityId}/spaces`, requestData);
           
           if (response.success && response.data) {
             const newSpace = response.data;
@@ -760,9 +993,9 @@ export const usePostsStore = create<PostsState>()(
               spaces: [newSpace, ...state.spaces],
               communitySpaces: {
                 ...state.communitySpaces,
-                [data.communityId]: [
+                [communityId]: [
                   newSpace,
-                  ...(state.communitySpaces[data.communityId] || [])
+                  ...(state.communitySpaces[communityId] || [])
                 ]
               }
             }));
@@ -910,6 +1143,64 @@ export const usePostsStore = create<PostsState>()(
         }
       },
 
+      // Chat Actions for Space Integration
+      openSpaceChat: async (spaceId: string, spaceName: string) => {
+        try {
+          const apiStore = useApiStore.getState();
+          const { currentSpace } = get();
+          
+          if (!currentSpace?.communityId) {
+            throw new Error('Community ID not found for space');
+          }
+
+          // Create or get space conversation
+          const response = await apiStore.post<ApiResponse<{ conversationId: string }>>(
+            `/communities/${currentSpace.communityId}/spaces/${spaceId}/chat/conversation`,
+            { spaceName }
+          );
+
+          if (response.success && response.data?.conversationId) {
+            console.log('✅ Space chat conversation created/retrieved:', response.data.conversationId);
+            return response.data.conversationId;
+          } else {
+            throw new Error(response.message || 'Failed to open space chat');
+          }
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Failed to open space chat';
+          console.error('💥 Open space chat error:', error);
+          throw new Error(message);
+        }
+      },
+
+      sendSpaceMessage: async (spaceId: string, content: string, type: 'text' | 'image' | 'file' = 'text') => {
+        try {
+          const apiStore = useApiStore.getState();
+          const { currentSpace } = get();
+          
+          if (!currentSpace?.communityId) {
+            throw new Error('Community ID not found for space');
+          }
+
+          const response = await apiStore.post(
+            `/communities/${currentSpace.communityId}/spaces/${spaceId}/chat/message`,
+            {
+              content,
+              type
+            }
+          );
+
+          if (!response.success) {
+            throw new Error(response.message || 'Failed to send message');
+          }
+
+          console.log('✅ Space message sent successfully');
+        } catch (error) {
+          const message = error instanceof Error ? error.message : 'Failed to send message';
+          console.error('💥 Send space message error:', error);
+          throw new Error(message);
+        }
+      },
+
       // Utility actions
       setFilters: (filters: PostFilters) => {
         set({ activeFilters: filters });
@@ -996,14 +1287,18 @@ export const useSpaces = () => {
     spaces: postsStore.spaces,
     communitySpaces: postsStore.communitySpaces,
     currentSpace: postsStore.currentSpace,
+    spaceContent: postsStore.spaceContent,
     isLoading: postsStore.isLoadingSpaces,
+    isLoadingContent: postsStore.isLoadingSpaceContent,
     error: postsStore.spacesError,
     
     // Actions
     fetchSpaces: postsStore.fetchSpaces,
     fetchSpacesByCommunity: postsStore.fetchSpacesByCommunity,
     fetchSpace: postsStore.fetchSpace,
+    fetchSpaceContent: postsStore.fetchSpaceContent,
     createSpace: postsStore.createSpace,
+    createSpacePost: postsStore.createSpacePost,
     updateSpace: postsStore.updateSpace,
     deleteSpace: postsStore.deleteSpace,
     joinSpace: postsStore.joinSpace,

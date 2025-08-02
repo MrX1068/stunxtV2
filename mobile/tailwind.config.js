@@ -14,7 +14,11 @@ module.exports = {
   theme: {
     extend: {
       colors: {
+        // ✨ Enhanced Professional Color System with modern industry standards
         primary: {
+          DEFAULT: '#6366F1', // Modern indigo
+          light: '#8B5CF6',   // Lighter violet
+          dark: '#4338CA',    // Darker indigo
           0: 'rgb(var(--color-primary-0)/<alpha-value>)',
           50: 'rgb(var(--color-primary-50)/<alpha-value>)',
           100: 'rgb(var(--color-primary-100)/<alpha-value>)',
@@ -29,6 +33,9 @@ module.exports = {
           950: 'rgb(var(--color-primary-950)/<alpha-value>)',
         },
         secondary: {
+          DEFAULT: '#059669', // Modern emerald
+          light: '#10B981',   
+          dark: '#047857',    
           0: 'rgb(var(--color-secondary-0)/<alpha-value>)',
           50: 'rgb(var(--color-secondary-50)/<alpha-value>)',
           100: 'rgb(var(--color-secondary-100)/<alpha-value>)',
@@ -41,6 +48,99 @@ module.exports = {
           800: 'rgb(var(--color-secondary-800)/<alpha-value>)',
           900: 'rgb(var(--color-secondary-900)/<alpha-value>)',
           950: 'rgb(var(--color-secondary-950)/<alpha-value>)',
+        },
+        
+        // 🎨 Professional semantic colors (Netflix/Spotify/Discord inspired)
+        danger: {
+          DEFAULT: '#EF4444',
+          light: '#F87171',
+          dark: '#DC2626',
+          50: '#FEF2F2',
+          100: '#FEE2E2',
+          200: '#FECACA',
+          300: '#FCA5A5',
+          400: '#F87171',
+          500: '#EF4444',
+          600: '#DC2626',
+          700: '#B91C1C',
+          800: '#991B1B',
+          900: '#7F1D1D',
+        },
+        warning: {
+          DEFAULT: '#F59E0B',
+          light: '#FBBF24',
+          dark: '#D97706',
+          50: '#FFFBEB',
+          100: '#FEF3C7',
+          200: '#FDE68A',
+          300: '#FCD34D',
+          400: '#FBBF24',
+          500: '#F59E0B',
+          600: '#D97706',
+          700: '#B45309',
+          800: '#92400E',
+          900: '#78350F',
+        }, 
+        info: {
+          DEFAULT: '#0EA5E9',
+          light: '#38BDF8',
+          dark: '#0284C7',
+          50: '#F0F9FF',
+          100: '#E0F2FE',
+          200: '#BAE6FD',
+          300: '#7DD3FC',
+          400: '#38BDF8',
+          500: '#0EA5E9',
+          600: '#0284C7',
+          700: '#0369A1',
+          800: '#075985',
+          900: '#0C4A6E',
+        },
+        success: {
+          DEFAULT: '#10B981',
+          light: '#34D399',
+          dark: '#059669',
+          50: '#ECFDF5',
+          100: '#D1FAE5',
+          200: '#A7F3D0',
+          300: '#6EE7B7',
+          400: '#34D399',
+          500: '#10B981',
+          600: '#059669',
+          700: '#047857',
+          800: '#065F46',
+          900: '#064E3B',
+        },
+        
+        // � Modern background system (inspired by GitHub/Linear/Notion)
+        bg: {
+          light: '#FFFFFF',
+          dark: '#0F0F23',     // Deep blue-black
+          surface: '#1A1B3E',  // Slightly lighter surface
+          card: '#2A2D5F',     // Card backgrounds
+          hover: '#3A3F73',    // Hover states
+        },
+        
+        // 📱 Surface colors for cards, modals, etc.
+        surface: {
+          50: '#F8FAFC',   // Almost white
+          100: '#F1F5F9',  // Very light gray
+          200: '#E2E8F0',  // Light gray
+          300: '#CBD5E1',  // Medium light gray
+          400: '#94A3B8',  // Medium gray
+          500: '#64748B',  // Neutral gray
+          600: '#475569',  // Dark gray
+          700: '#334155',  // Very dark gray
+          800: '#1E293B',  // Almost black
+          900: '#0F172A',  // Deep black
+        },
+        
+        // 📝 Enhanced text system with better contrast
+        text: {
+          light: '#111827',    // Nearly black for light mode
+          dark: '#F9FAFB',     // Nearly white for dark mode
+          muted: '#6B7280',    // Muted text
+          subtle: '#9CA3AF',   // Subtle text
         },
         tertiary: {
           50: 'rgb(var(--color-tertiary-50)/<alpha-value>)',

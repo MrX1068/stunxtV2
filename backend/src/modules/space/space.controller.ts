@@ -19,8 +19,10 @@ import {
   ApiBearerAuth,
   ApiParam,
   ApiQuery,
+  ApiBody,
 } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { SpaceAccessGuard, SpaceContentAccess } from './guards/space-access.guard';
 import { SpaceService } from './space.service';
 import { SpaceMemberService } from './space-member.service';
 import { 
@@ -39,10 +41,13 @@ import { SpaceMemberRole } from '../../shared/entities/space-member.entity';
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class SpaceController {
+  // Fixed content endpoints
   constructor(
     private readonly spaceService: SpaceService,
     private readonly spaceMemberService: SpaceMemberService,
-  ) {}
+  ) {
+    console.log('🚀 [SpaceController] Controller initialized with content endpoints');
+  }
 
   @Post()
   @ApiOperation({ summary: 'Create a new space in community' })
@@ -443,6 +448,112 @@ export class SpaceController {
       limit: limit ? parseInt(limit.toString()) : 20,
     });
   }
+
+  // ==================== SECURE SPACE CONTENT ENDPOINTS ====================
+
+  @Get(':id/content')
+  @UseGuards(SpaceAccessGuard)
+  // Don't specify content type in decorator - let the guard infer it dynamically
+  @ApiOperation({ summary: 'Get space content (posts OR messages based on interaction type)' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiParam({ name: 'id', description: 'Space ID' })
+  @ApiQuery({ name: 'limit', type: Number, required: false, example: 20, description: 'Number of items to return' })
+  @ApiQuery({ name: 'offset', type: Number, required: false, example: 0, description: 'Number of items to skip' })
+  @ApiQuery({ name: 'type', enum: ['posts', 'messages'], required: false, description: 'Override content type detection' })
+  @ApiQuery({ name: 'before', type: String, required: false, description: 'Cursor for pagination (message ID)' })
+  @ApiQuery({ name: 'after', type: String, required: false, description: 'Cursor for pagination (message ID)' })
+  @ApiResponse({ status: 200, description: 'Space content retrieved successfully' })
+  @ApiResponse({ status: 403, description: 'Access denied to space' })
+  @ApiResponse({ status: 404, description: 'Space not found' })
+  async getSpaceContent(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Param('id', ParseUUIDPipe) spaceId: string,
+    @Request() req: any,
+    @Query('limit') limit: number = 20,
+    @Query('offset') offset: number = 0,
+    @Query('type') contentType?: 'posts' | 'messages',
+    @Query('before') before?: string,
+    @Query('after') after?: string,
+  ) {
+    console.log('🔵 [SpaceController] GET /content endpoint hit');
+    console.log('🔵 [SpaceController] Params:', { communityId, spaceId });
+    console.log('🔵 [SpaceController] Query params:', { limit, offset, contentType, before, after });
+    console.log('🔵 [SpaceController] User ID:', req.user?.id);
+    
+    try {
+      const result = await this.spaceService.getSpaceContent(spaceId, req.user.id, {
+        limit,
+        offset,
+        contentType,
+        before,
+        after,
+      });
+      console.log('✅ [SpaceController] Content retrieved successfully:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ [SpaceController] Error getting space content:', error);
+      throw error;
+    }
+  }
+
+  @Post(':id/content')
+  @UseGuards(SpaceAccessGuard)
+  // Don't specify content type in decorator - let the guard infer it dynamically
+  @ApiOperation({ summary: 'Create content in space (post OR message based on interaction type)' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiParam({ name: 'id', description: 'Space ID' })
+  @ApiBody({
+    description: 'Content creation data (structure varies by space interaction type)',
+    schema: {
+      oneOf: [
+        {
+          type: 'object',
+          title: 'Post Content',
+          properties: {
+            title: { type: 'string', maxLength: 200 },
+            content: { type: 'string', maxLength: 10000 },
+            tags: { type: 'array', items: { type: 'string' } },
+            featuredImage: { type: 'string' },
+          },
+          required: ['content']
+        },
+        {
+          type: 'object', 
+          title: 'Message Content',
+          properties: {
+            content: { type: 'string', maxLength: 4000 },
+            type: { type: 'string', enum: ['TEXT', 'IMAGE', 'VIDEO', 'FILE'] },
+            replyToId: { type: 'string', format: 'uuid' },
+            attachments: { type: 'array', items: { type: 'object' } },
+            optimisticId: { type: 'string' }
+          },
+          required: ['content', 'type']
+        }
+      ]
+    }
+  })
+  @ApiResponse({ status: 201, description: 'Content created successfully' })
+  @ApiResponse({ status: 403, description: 'Access denied to space' })
+  async createSpaceContent(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Param('id', ParseUUIDPipe) spaceId: string,
+    @Body() createContentDto: any,
+    @Request() req: any,
+  ) {
+    console.log('🟡 [SpaceController] POST /content endpoint hit');
+    console.log('🟡 [SpaceController] Params:', { communityId, spaceId });
+    console.log('🟡 [SpaceController] Body:', createContentDto);
+    console.log('🟡 [SpaceController] User ID:', req.user?.id);
+    
+    try {
+      const result = await this.spaceService.createSpaceContent(spaceId, req.user.id, createContentDto);
+      console.log('✅ [SpaceController] Content created successfully:', result);
+      return result;
+    } catch (error) {
+      console.error('❌ [SpaceController] Error creating space content:', error);
+      throw error;
+    }
+  }
 }
 
 // Global Space Controller (not community-specific)
@@ -533,5 +644,134 @@ export class GlobalSpaceController {
       page: page ? parseInt(page.toString()) : 1,
       limit: limit ? parseInt(limit.toString()) : 20,
     });
+  }
+
+  // ==================== CHAT ENDPOINTS ====================
+
+  @Post(':id/chat/conversation')
+  @UseGuards(SpaceAccessGuard)
+  @ApiOperation({ summary: 'Create or get space chat conversation' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiParam({ name: 'id', description: 'Space ID' })
+  @ApiBody({ 
+    schema: { 
+      type: 'object', 
+      properties: { 
+        spaceName: { type: 'string', description: 'Space name for conversation title' }
+      }
+    }
+  })
+  @ApiResponse({ status: 200, description: 'Space conversation created/retrieved successfully' })
+  @ApiResponse({ status: 403, description: 'Access denied to space' })
+  @ApiResponse({ status: 404, description: 'Space not found' })
+  async createSpaceConversation(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Param('id', ParseUUIDPipe) spaceId: string,
+    @Request() req: any,
+    @Body() body: { spaceName?: string },
+  ) {
+    console.log('🔵 [SpaceController] POST /chat/conversation endpoint hit');
+    console.log('🔵 [SpaceController] Params:', { communityId, spaceId, spaceName: body.spaceName });
+    console.log('🔵 [SpaceController] User ID:', req.user?.id);
+    
+    try {
+      const conversationId = await this.spaceService.getOrCreateSpaceConversation(
+        spaceId, 
+        req.user.id,
+        body.spaceName
+      );
+      
+      console.log('✅ [SpaceController] Space conversation created/retrieved:', conversationId);
+      return { 
+        success: true, 
+        data: { conversationId },
+        message: 'Space conversation ready'
+      };
+    } catch (error) {
+      console.error('❌ [SpaceController] Error creating space conversation:', error);
+      throw error;
+    }
+  }
+
+  @Post(':id/chat/message')
+  @UseGuards(SpaceAccessGuard)
+  @ApiOperation({ summary: 'Send message to space chat' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiParam({ name: 'id', description: 'Space ID' })
+  @ApiBody({ 
+    schema: { 
+      type: 'object', 
+      properties: { 
+        content: { type: 'string', description: 'Message content' },
+        type: { type: 'string', enum: ['text', 'image', 'file'], description: 'Message type' }
+      },
+      required: ['content']
+    }
+  })
+  @ApiResponse({ status: 200, description: 'Message sent successfully' })
+  @ApiResponse({ status: 403, description: 'Access denied to space' })
+  @ApiResponse({ status: 404, description: 'Space not found' })
+  async sendSpaceMessage(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Param('id', ParseUUIDPipe) spaceId: string,
+    @Request() req: any,
+    @Body() body: { content: string; type?: 'text' | 'image' | 'file' },
+  ) {
+    console.log('🔵 [SpaceController] POST /chat/message endpoint hit');
+    console.log('🔵 [SpaceController] Params:', { communityId, spaceId, type: body.type });
+    console.log('🔵 [SpaceController] User ID:', req.user?.id);
+    console.log('🔵 [SpaceController] Content length:', body.content?.length);
+    
+    try {
+      const result = await this.spaceService.sendSpaceMessage(spaceId, req.user.id, {
+        content: body.content,
+        type: body.type || 'text'
+      });
+      
+      console.log('✅ [SpaceController] Space message sent successfully');
+      return {
+        success: true,
+        data: result,
+        message: 'Message sent successfully'
+      };
+    } catch (error) {
+      console.error('❌ [SpaceController] Error sending space message:', error);
+      throw error;
+    }
+  }
+
+  @Get(':id/chat/messages')
+  @UseGuards(SpaceAccessGuard)
+  @ApiOperation({ summary: 'Get space chat messages' })
+  @ApiParam({ name: 'communityId', description: 'Community ID' })
+  @ApiParam({ name: 'id', description: 'Space ID' })
+  @ApiQuery({ name: 'limit', type: Number, required: false, example: 50, description: 'Number of messages to return' })
+  @ApiQuery({ name: 'before', type: String, required: false, description: 'Message ID to fetch messages before' })
+  @ApiResponse({ status: 200, description: 'Space messages retrieved successfully' })
+  @ApiResponse({ status: 403, description: 'Access denied to space' })
+  @ApiResponse({ status: 404, description: 'Space not found' })
+  async getSpaceMessages(
+    @Param('communityId', ParseUUIDPipe) communityId: string,
+    @Param('id', ParseUUIDPipe) spaceId: string,
+    @Request() req: any,
+    @Query('limit') limit: number = 50,
+    @Query('before') before?: string,
+  ) {
+    console.log('🔵 [SpaceController] GET /chat/messages endpoint hit');
+    console.log('🔵 [SpaceController] Params:', { communityId, spaceId, limit, before });
+    console.log('🔵 [SpaceController] User ID:', req.user?.id);
+    
+    try {
+      const result = await this.spaceService.getSpaceMessages(spaceId, req.user.id, {
+        limit,
+        before
+      });
+      
+      console.log('✅ [SpaceController] Space messages retrieved:', result?.messages?.length || 0);
+      return result;
+    } catch (error) {
+      console.error('❌ [SpaceController] Error getting space messages:', error);
+      throw error;
+    }
   }
 }

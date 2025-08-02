@@ -1,5 +1,5 @@
 import React, { useEffect, ReactNode } from "react";
-import { useAuth } from "@/stores/auth";
+import { useAuth, useProfile } from "@/stores/auth";
 import * as SecureStore from 'expo-secure-store';
 
 interface AuthProviderProps {
@@ -8,6 +8,7 @@ interface AuthProviderProps {
 
 export function AuthProvider({ children }: AuthProviderProps) {
   const { refreshAuth } = useAuth();
+  const { refreshUserDataIfStale } = useProfile();
 
   useEffect(() => {
     // Check if we have stored tokens before attempting refresh
@@ -22,6 +23,10 @@ export function AuthProvider({ children }: AuthProviderProps) {
         if (storedToken && storedRefreshToken) {
           console.log('AuthProvider - Found stored tokens, attempting refresh...');
           await refreshAuth();
+          
+          // After successful auth refresh, check if user data is stale and refresh if needed
+          console.log('AuthProvider - Checking if user data needs refresh...');
+          await refreshUserDataIfStale();
         } else {
           console.log('AuthProvider - No stored tokens found, skipping refresh');
         }
@@ -32,7 +37,7 @@ export function AuthProvider({ children }: AuthProviderProps) {
     };
 
     initAuth();
-  }, []);
+  }, [refreshAuth, refreshUserDataIfStale]);
 
   return <>{children}</>;
 }

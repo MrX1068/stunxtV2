@@ -28,7 +28,8 @@ export default function CommunityDetailScreen() {
   } = useCommunities();
 
   const {
-    spaces,
+    spaces = [], // 🔧 Add default empty array to prevent undefined errors
+    communitySpaces = {}, // 🔧 Add default empty object
     isLoading: isLoadingSpaces,
     fetchSpacesByCommunity,
     joinSpace,
@@ -38,14 +39,27 @@ export default function CommunityDetailScreen() {
 
   useEffect(() => {
     if (id) {
+      console.log('🏘️ Loading community details for ID:', id);
+      
       // Fetch community details
       const communityData = getCommunityById(id);
+      console.log('📋 Community data:', communityData);
       setCommunity(communityData || null);
       
-      // Fetch spaces for this community
-      fetchSpacesByCommunity(id);
+      // 🔧 FIX: Ensure spaces are fetched correctly
+      const loadCommunitySpaces = async () => {
+        try {
+          console.log('🚀 Fetching spaces for community:', id);
+          await fetchSpacesByCommunity(id);
+          console.log('✅ Spaces fetched successfully');
+        } catch (error) {
+          console.warn('❌ Failed to fetch spaces for community:', id, error);
+        }
+      };
+      
+      loadCommunitySpaces();
     }
-  }, [id]);
+  }, [id, getCommunityById, fetchSpacesByCommunity]);
 
   const handleBack = () => {
     router.back();
@@ -57,9 +71,8 @@ export default function CommunityDetailScreen() {
   };
 
   const handleSpacePress = (space: Space) => {
-    console.log('Opening space:', space.name);
-    // TODO: Navigate to space detail screen
-    // router.push(`/space/${space.id}`);
+    console.log('🚀 Navigating to space:', space.name, 'Type:', space.interactionType);
+    router.push(`/space/${space.id}` as any);
   };
 
   const handleJoinSpace = async (spaceId: string) => {
@@ -93,9 +106,19 @@ export default function CommunityDetailScreen() {
     );
   }
 
-  // Filter spaces for this community
-  const communitySpaces = spaces.filter(space => space.communityId === id);
-  const canCreateSpace = true; // TODO: Check if user has permission to create spaces in this community
+  // Get spaces for this specific community from the communitySpaces object
+  const currentCommunitySpaces = id ? (communitySpaces[id] || []) : [];
+  console.log('📦 Current community spaces:', { 
+    communityId: id, 
+    spacesCount: currentCommunitySpaces.length,
+    communitySpacesKeys: Object.keys(communitySpaces)
+  });
+  
+  const canCreateSpace = community?.isOwner || true; // TODO: Check proper permissions from community settings
+
+  // 🚀 Enhanced empty state handling
+  const hasSpaces = currentCommunitySpaces.length > 0;
+  const isOwner = community?.isOwner;
 
   return (
     <View className="flex-1 bg-background-0">
@@ -142,7 +165,7 @@ export default function CommunityDetailScreen() {
             <HStack space="xs" className="items-center">
               <MaterialIcons name="space-dashboard" size={16} color="#6B7280" />
               <Text size="sm" className="text-typography-500">
-                {communitySpaces.length} spaces
+                {currentCommunitySpaces.length} spaces
               </Text>
             </HStack>
             
@@ -162,15 +185,18 @@ export default function CommunityDetailScreen() {
       {/* Spaces List */}
       <View className="flex-1">
         <SpaceList
-          spaces={communitySpaces}
+          spaces={currentCommunitySpaces}
           isLoading={isLoadingSpaces}
           onRefresh={handleRefresh}
           onSpacePress={handleSpacePress}
           onJoinSpace={handleJoinSpace}
           onLeaveSpace={handleLeaveSpace}
           onCreateSpace={canCreateSpace ? handleCreateSpace : undefined}
-          title="Spaces in this Community"
-          emptyMessage="No spaces in this community yet."
+          title={`Spaces (${currentCommunitySpaces.length})`}
+          emptyMessage={isOwner 
+            ? "No spaces yet. Create the first space to get discussions started!" 
+            : "No spaces available in this community yet."
+          }
           showCommunity={false}
           variant="default"
         />

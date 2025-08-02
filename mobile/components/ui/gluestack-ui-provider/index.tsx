@@ -4,11 +4,12 @@ import { View, ViewProps } from 'react-native';
 import { OverlayProvider } from '@gluestack-ui/overlay';
 import { ToastProvider } from '@gluestack-ui/toast';
 import { useColorScheme } from 'nativewind';
+import { useTheme } from '../../../providers/ThemeContext';
 
 export type ModeType = 'light' | 'dark' | 'system';
 
 export function GluestackUIProvider({
-  mode = 'light',
+  mode,
   children,
   style,
 }: {
@@ -17,14 +18,19 @@ export function GluestackUIProvider({
   style?: ViewProps['style'];
 }) {
   const { colorScheme, setColorScheme } = useColorScheme();
+  const { isDark } = useTheme();
+
+  // Use theme from context or fallback to prop/default
+  const currentMode = mode || (isDark ? 'dark' : 'light');
 
   useEffect(() => {
-    setColorScheme(mode);
-  }, [mode, setColorScheme]);
+    setColorScheme(currentMode);
+  }, [currentMode, setColorScheme]);
+
   return (
     <View
       style={[
-        config[colorScheme || 'light'],
+        config[colorScheme || currentMode],
         { flex: 1, height: '100%', width: '100%' },
         style,
       ]}

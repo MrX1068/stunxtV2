@@ -1,6 +1,6 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { View, ScrollView, KeyboardAvoidingView, Platform, Pressable, Alert, Image } from "react-native";
-import { router } from "expo-router";
+import { router, useLocalSearchParams } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import * as ImagePicker from 'expo-image-picker';
@@ -15,8 +15,9 @@ import {
   Input,
   InputField,
 } from "@/components/ui";
-import { useAuth } from "@/stores/auth";
+import { useAuth, useProfile } from "@/stores/auth";
 import { useApiStore } from "@/stores/api";
+import { Avatar } from "@/components/Avatar";
 
 interface UploadStatus {
   uploading: boolean;
@@ -25,9 +26,15 @@ interface UploadStatus {
 }
 
 export default function ProfileSetupScreen() {
-  const { isLoading, error: authError, clearError } = useAuth();
+  const { user, isLoading, error: authError, clearError } = useAuth();
+  const { refreshUserData } = useProfile();
   const apiStore = useApiStore();
   const insets = useSafeAreaInsets();
+  const params = useLocalSearchParams();
+  
+  // Check if user came from edit profile (not onboarding)
+  const isEditMode = params.mode === 'edit' || params.from === 'profile';
+  
   const [formData, setFormData] = useState({
     avatarUrl: null as string | null,
     bio: "",
@@ -40,6 +47,18 @@ export default function ProfileSetupScreen() {
     progress: 0,
     error: null,
   });
+
+  // Load existing user data when component mounts
+  useEffect(() => {
+    if (user) {
+      setFormData({
+        avatarUrl: user.avatarUrl || null,
+        bio: user.profile?.bio || "",
+        location: user.profile?.location || "",
+        websiteUrl: user.profile?.website || "",
+      });
+    }
+  }, [user]);
 
   const updateField = (field: string, value: string) => {
     setFormData(prev => ({ ...prev, [field]: value }));
@@ -73,7 +92,7 @@ export default function ProfileSetupScreen() {
       console.log("uploadResponse", uploadResponse);
       console.log("uploadResponse.success", uploadResponse.success);
       console.log("uploadResponse.data", uploadResponse.data);
-      console.log("uploadResponse.data?.avatarUrl", uploadResponse.data?.avatarUrl);
+      console.log("uploadResponse.data?.avatarUrl", uploadResponse.data?.data?.avatarUrl);
 
       // Check for success response - backend returns { success: true, data: { avatarUrl: "..." } }
       if (uploadResponse.success && uploadResponse.data?.data?.avatarUrl) {
@@ -85,7 +104,7 @@ export default function ProfileSetupScreen() {
         console.log("❌ Upload response validation failed");
         console.log("Success check:", uploadResponse.success);
         console.log("Data check:", uploadResponse.data);
-        console.log("Avatar URL check:", uploadResponse.data?.avatarUrl);
+        console.log("Avatar URL check:", uploadResponse.data?.data?.avatarUrl);
         throw new Error('Upload failed - no URL returned');
       }
     } catch (uploadError) {
@@ -182,8 +201,17 @@ export default function ProfileSetupScreen() {
       // Update user profile via API
       await apiStore.put('/users/me', profileData);
       
-      // Navigate to interests selection
-      router.replace("/auth/interests");
+      // Refresh user data in auth store to get updated profile
+      await refreshUserData();
+      
+      // Navigate based on context
+      if (isEditMode) {
+        // User came from edit profile - go back to profile page
+        router.back();
+      } else {
+        // User is in onboarding flow - continue to interests
+        router.replace("/auth/interests");
+      }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Failed to save profile";
       setError(errorMessage);
@@ -192,7 +220,13 @@ export default function ProfileSetupScreen() {
   
 
   const handleSkip = () => {
-    router.replace("/auth/interests");
+    if (isEditMode) {
+      // User came from edit profile - go back to profile page
+      router.back();
+    } else {
+      // User is in onboarding flow - continue to interests
+      router.replace("/auth/interests");
+    }
   };
 
   const renderAvatarSection = () => {
@@ -205,14 +239,11 @@ export default function ProfileSetupScreen() {
         <Pressable onPress={handleImagePicker} disabled={isUploading}>
           <Box className="w-32 h-32 bg-primary-100 rounded-full items-center justify-center border-4 border-background-200 overflow-hidden">
             {formData.avatarUrl ? (
-              <Image 
-                source={{ uri: formData.avatarUrl }} 
-                style={{ 
-                  width: '100%', 
-                  height: '100%',
-                  borderRadius: 64,
-                }}
-                resizeMode="cover"
+              <Avatar 
+                src={formData.avatarUrl}
+                size={128}
+                fallbackText="📷"
+                style={{ borderRadius: 64 }}
               />
             ) : (
               <VStack className="items-center gap-2">
@@ -286,10 +317,13 @@ export default function ProfileSetupScreen() {
           {/* Header */}
           <VStack className="items-center gap-4">
             <Heading size="3xl" className="font-bold text-typography-900 text-center">
-              Set Up Your Profile
+              {isEditMode ? "Edit Your Profile" : "Set Up Your Profile"}
             </Heading>
             <Text size="lg" className="text-typography-600 text-center max-w-sm">
-              Tell us a bit about yourself to personalize your experience
+              {isEditMode 
+                ? "Update your profile information" 
+                : "Tell us a bit about yourself to personalize your experience"
+              }
             </Text>
           </VStack>
 
@@ -366,15 +400,17 @@ export default function ProfileSetupScreen() {
               disabled={isLoading || uploadStatus.uploading}
             >
               <ButtonText className="font-semibold text-white">
-                {isLoading ? "Saving..." : "Continue"}
+                {isLoading ? "Saving..." : isEditMode ? "Save Changes" : "Continue"}
               </ButtonText>
             </Button>
 
-            <Button variant="link" onPress={handleSkip}>
-              <ButtonText className="text-typography-600">
-                Skip for now
-              </ButtonText>
-            </Button>
+            {!isEditMode && (
+              <Button variant="link" onPress={handleSkip}>
+                <ButtonText className="text-typography-600">
+                  Skip for now
+                </ButtonText>
+              </Button>
+            )}
           </VStack>
         </VStack>
       </ScrollView>

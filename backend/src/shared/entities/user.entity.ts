@@ -7,8 +7,6 @@ import {
   DeleteDateColumn,
   OneToMany,
   OneToOne,
-  ManyToMany,
-  JoinTable,
   Index,
 } from 'typeorm';
 import { Exclude } from 'class-transformer';
@@ -23,6 +21,7 @@ import { UserProfile } from './user-profile.entity';
 import { UserPreferences } from './user-preferences.entity';
 import { UserFollow } from './user-follow.entity';
 import { UserBlock } from './user-block.entity';
+import { UserStats } from './user-stats.entity';
 
 export enum UserStatus {
   ACTIVE = 'active',
@@ -88,24 +87,6 @@ export class User {
   @IsUrl({}, { message: 'Please provide a valid banner URL' })
   bannerUrl?: string;
 
-  @ApiPropertyOptional({ description: 'User bio/description' })
-  @Column({ type: 'text', nullable: true })
-  @IsOptional()
-  @Length(0, 500, { message: 'Bio cannot exceed 500 characters' })
-  bio: string;
-
-  @ApiPropertyOptional({ description: 'User location' })
-  @Column({ length: 100, nullable: true })
-  @IsOptional()
-  @Length(0, 100, { message: 'Location cannot exceed 100 characters' })
-  location: string;
-
-  @ApiPropertyOptional({ description: 'User website URL' })
-  @Column({ name: 'website_url', nullable: true })
-  @IsOptional()
-  @IsUrl({}, { message: 'Please provide a valid website URL' })
-  websiteUrl: string;
-
   @ApiProperty({ description: 'User status', enum: UserStatus })
   @Column({
     type: 'enum',
@@ -136,26 +117,30 @@ export class User {
 
   @ApiPropertyOptional({ description: 'External provider ID' })
   @Column({ name: 'provider_id', nullable: true })
-  providerId: string;
+  providerId?: string;
 
   @ApiProperty({ description: 'Whether email is verified' })
   @Column({ name: 'email_verified', default: false })
   emailVerified: boolean;
 
+  @ApiProperty({ description: 'Whether user is verified (blue checkmark)' })
+  @Column({ name: 'is_verified', default: false })
+  isVerified: boolean;
+
   @ApiPropertyOptional({ description: 'Email verification token' })
   @Exclude()
   @Column({ name: 'email_verification_token', nullable: true })
-  emailVerificationToken: string;
+  emailVerificationToken?: string;
 
   @ApiPropertyOptional({ description: 'Password reset token' })
   @Exclude()
   @Column({ name: 'password_reset_token', nullable: true })
-  passwordResetToken: string;
+  passwordResetToken?: string;
 
   @ApiPropertyOptional({ description: 'Password reset token expiry' })
   @Exclude()
   @Column({ name: 'password_reset_expires', type: 'timestamp', nullable: true })
-  passwordResetExpires: Date;
+  passwordResetExpires?: Date;
 
   @ApiProperty({ description: 'Two-factor authentication enabled' })
   @Column({ name: 'two_factor_enabled', default: false })
@@ -164,15 +149,15 @@ export class User {
   @ApiPropertyOptional({ description: 'Two-factor authentication secret' })
   @Exclude()
   @Column({ name: 'two_factor_secret', nullable: true })
-  twoFactorSecret: string;
+  twoFactorSecret?: string;
 
   @ApiPropertyOptional({ description: 'Last login timestamp' })
   @Column({ name: 'last_login_at', type: 'timestamp', nullable: true })
-  lastLoginAt: Date;
+  lastLoginAt?: Date;
 
   @ApiPropertyOptional({ description: 'Last active timestamp' })
   @Column({ name: 'last_active_at', type: 'timestamp', nullable: true })
-  lastActiveAt: Date;
+  lastActiveAt?: Date;
 
   @ApiProperty({ description: 'Failed login attempts count' })
   @Column({ name: 'failed_login_attempts', default: 0 })
@@ -180,15 +165,7 @@ export class User {
 
   @ApiPropertyOptional({ description: 'Account locked until timestamp' })
   @Column({ name: 'locked_until', type: 'timestamp', nullable: true })
-  lockedUntil: Date;
-
-  @ApiProperty({ description: 'User preferences in JSON format' })
-  @Column({ type: 'jsonb', default: {} })
-  preferences: Record<string, any>;
-
-  @ApiProperty({ description: 'User metadata in JSON format' })
-  @Column({ type: 'jsonb', default: {} })
-  metadata: Record<string, any>;
+  lockedUntil?: Date;
 
   @ApiProperty({ description: 'Record creation timestamp' })
   @CreateDateColumn({ name: 'created_at' })
@@ -200,9 +177,39 @@ export class User {
 
   @ApiPropertyOptional({ description: 'Record deletion timestamp (soft delete)' })
   @DeleteDateColumn({ name: 'deleted_at' })
-  deletedAt: Date;
+  deletedAt?: Date;
 
-  // Relationships
+  // Relationships with eager loading for frequently accessed data
+  @OneToOne(() => UserProfile, (profile) => profile.user, {
+    cascade: true,
+    eager: true,
+  })
+  profile?: UserProfile;
+
+  @OneToOne(() => UserPreferences, (preferences) => preferences.user, {
+    cascade: true,
+    eager: true,
+  })
+  preferences?: UserPreferences;
+
+  @OneToOne(() => UserStats, (stats) => stats.user, {
+    cascade: true,
+    eager: true,
+  })
+  stats?: UserStats;
+
+  @OneToMany(() => UserFollow, (follow) => follow.follower)
+  following: UserFollow[];
+
+  @OneToMany(() => UserFollow, (follow) => follow.following)
+  followers: UserFollow[];
+
+  @OneToMany(() => UserBlock, (block) => block.blocker)
+  blocking: UserBlock[];
+
+  @OneToMany(() => UserBlock, (block) => block.blocked)
+  blockedBy: UserBlock[];
+
   @OneToMany(() => Community, (community) => community.owner, {
     cascade: true,
   })
@@ -228,30 +235,47 @@ export class User {
   })
   loginAttempts: LoginAttempt[];
 
-  // New relationships for User Management
-  @OneToOne(() => UserProfile, (profile) => profile.user, {
-    cascade: true,
-    eager: true,
-  })
-  profile: UserProfile;
+  // Virtual properties for easy access to related data
+  get bio(): string {
+    return this.profile?.bio || '';
+  }
 
-  @OneToOne(() => UserPreferences, (preferences) => preferences.user, {
-    cascade: true,
-    eager: true,
-  })
-  userPreferences: UserPreferences;
+  get location(): string {
+    return this.profile?.location || '';
+  }
 
-  @OneToMany(() => UserFollow, (follow) => follow.follower)
-  following: UserFollow[];
+  get website(): string {
+    return this.profile?.website || '';
+  }
 
-  @OneToMany(() => UserFollow, (follow) => follow.following)
-  followers: UserFollow[];
+  get interests(): string[] {
+    return this.preferences?.metadata?.interests || [];
+  }
 
-  @OneToMany(() => UserBlock, (block) => block.blocker)
-  blocking: UserBlock[];
+  get isOnboardingComplete(): boolean {
+    // Backend determines onboarding completion based on actual data
+    // Made more flexible to match frontend expectations
+    const hasBasicInfo = !!(this.fullName && this.username && this.emailVerified);
+    const hasProfileOrAvatar = !!(this.profile?.bio || this.profile?.location || this.profile?.website || this.avatarUrl);
+    const hasInterests = (this.interests.length > 0); // At least 1 interest instead of 3
+    
+    // More flexible: Basic info + (profile/avatar OR interests)
+    return hasBasicInfo && (hasProfileOrAvatar || hasInterests);
+  }
 
-  @OneToMany(() => UserBlock, (block) => block.blocked)
-  blockedBy: UserBlock[];
+  get userStats(): {
+    posts: number;
+    followers: number;
+    following: number;
+    communities: number;
+  } {
+    return {
+      posts: this.stats?.postCount || 0,
+      followers: this.stats?.followerCount || 0,
+      following: this.stats?.followingCount || 0,
+      communities: this.stats?.communityCount || 0,
+    };
+  }
 
   // Helper methods
   isActive(): boolean {

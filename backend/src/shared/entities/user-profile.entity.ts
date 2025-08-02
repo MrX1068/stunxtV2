@@ -25,18 +25,6 @@ export class UserProfile {
   @Column({ name: 'user_id' })
   userId!: string;
 
-  @ApiPropertyOptional({ description: 'User first name' })
-  @Column({ name: 'first_name', length: 100, nullable: true })
-  @IsOptional()
-  @Length(1, 100)
-  firstName?: string;
-
-  @ApiPropertyOptional({ description: 'User last name' })
-  @Column({ name: 'last_name', length: 100, nullable: true })
-  @IsOptional()
-  @Length(1, 100)
-  lastName?: string;
-
   @ApiPropertyOptional({ description: 'User biography' })
   @Column({ type: 'text', nullable: true })
   @IsOptional()

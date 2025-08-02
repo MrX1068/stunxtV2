@@ -1138,7 +1138,7 @@ export class AuthService {
       avatarUrl: user.avatarUrl,
       bio: user.bio,
       location: user.location,
-      websiteUrl: user.websiteUrl,
+      websiteUrl: user.website, // Use website virtual property
       status: user.status,
       role: user.role,
       authProvider: user.authProvider,

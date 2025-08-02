@@ -1,5 +1,5 @@
 import { View, ScrollView, RefreshControl, Pressable, Alert } from "react-native";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { StatusBar } from "expo-status-bar";
 import { router } from "expo-router";
 import {
@@ -12,7 +12,10 @@ import {
   ButtonText,
 } from "@/components/ui";
 import { useTheme } from "@/providers/ThemeContext";
-import { useAuth } from "@/stores/auth";
+import { useAuth, useProfile } from "@/stores/auth";
+import { Avatar } from "@/components/Avatar";
+import { ProfileCompletionBanner } from "@/components/ProfileCompletionBanner";
+import { useOnboardingStatus } from "@/utils/useOnboardingStatus";
 
 interface UserStats {
   posts: number;
@@ -85,12 +88,21 @@ const menuItems = [
 export default function ProfileScreen() {
   const { isDark } = useTheme();
   const { user, logout, isLoading, error } = useAuth();
+  const { refreshUserData } = useProfile();
   const [refreshing, setRefreshing] = useState(false);
+  const { isComplete: isOnboardingComplete } = useOnboardingStatus();
+
+  // No automatic refresh on mount - handled by AuthProvider smartly
 
   const onRefresh = async () => {
     setRefreshing(true);
-    // TODO: Fetch user data from API
-    setTimeout(() => setRefreshing(false), 1000);
+    try {
+      await refreshUserData();
+    } catch (error) {
+      console.error('Error refreshing user data:', error);
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleLogout = async () => {
@@ -121,7 +133,7 @@ export default function ProfileScreen() {
   const handleMenuPress = (action: string) => {
     switch (action) {
       case "edit-profile":
-        console.log("Edit profile");
+        router.push('/auth/profile-setup?mode=edit&from=profile');
         break;
       case "my-posts":
         console.log("My posts");
@@ -195,12 +207,21 @@ export default function ProfileScreen() {
         showsVerticalScrollIndicator={false}
       >
         <VStack className="gap-6">
+          {/* Profile Completion Banner - shows automatically based on completion status */}
+          <ProfileCompletionBanner />
+
           {/* Profile Header */}
           <Box className="bg-gradient-to-br from-primary-500 to-primary-700 p-6 pt-16">
             <VStack className="gap-4 items-center">
-              <Box className="w-20 h-20 bg-background-0 rounded-full items-center justify-center">
-                <Text className="text-4xl">👤</Text>
-              </Box>
+              <Avatar 
+                src={user?.avatarUrl || null} 
+                size={80} 
+                fallbackText={user?.fullName || user?.username || "U"}
+                style={{ 
+                  borderWidth: 4, 
+                  borderColor: 'rgba(255,255,255,0.2)' 
+                }}
+              />
               
               <VStack className="items-center gap-1">
                 <Text className="text-xl font-bold text-white">
@@ -210,14 +231,19 @@ export default function ProfileScreen() {
                   @{user?.username || "username"}
                 </Text>
                 <Text className="text-primary-200 text-center mt-2 max-w-xs">
-                  {user?.bio || "Bio not provided"}
+                  {user?.profile?.bio || "Bio not provided"}
                 </Text>
+                {user?.profile?.location && (
+                  <Text className="text-primary-200 text-center text-sm">
+                    📍 {user.profile.location}
+                  </Text>
+                )}
               </VStack>
 
               <Button
                 variant="outline"
                 className="border-white/20 bg-white/10"
-                onPress={() => handleMenuPress("edit-profile")}
+                onPress={() => router.push('/auth/profile-setup?mode=edit&from=profile')}
               >
                 <ButtonText className="text-white font-medium">Edit Profile</ButtonText>
               </Button>
@@ -227,10 +253,10 @@ export default function ProfileScreen() {
           {/* Stats */}
           <Box className="bg-background-50 mx-4 rounded-xl p-6 -mt-8 shadow-sm">
             <HStack className="justify-around">
-              <StatCard label="Posts" value={userStats.posts} />
-              <StatCard label="Communities" value={userStats.communities} />
-              <StatCard label="Followers" value={userStats.followers} />
-              <StatCard label="Following" value={userStats.following} />
+              <StatCard label="Posts" value={user?.stats?.postCount || user?.userStats?.posts || 0} />
+              <StatCard label="Communities" value={user?.stats?.communityCount || user?.userStats?.communities || 0} />
+              <StatCard label="Followers" value={user?.stats?.followerCount || user?.userStats?.followers || 0} />
+              <StatCard label="Following" value={user?.stats?.followingCount || user?.userStats?.following || 0} />
             </HStack>
           </Box>
 

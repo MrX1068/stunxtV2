@@ -26,6 +26,7 @@ import { Roles } from '../auth/decorators/roles.decorator';
 import { UserRole } from '../../shared/entities/user.entity';
 import { UserService, UpdateUserDto, UpdateUserPreferencesDto, UserSearchOptions } from './user.service';
 import { GrpcFileClient } from './grpc-file.client';
+import { ImageTransformService } from '../../shared/services/image-transform.service';
 
 @ApiTags('Users')
 @Controller('users')
@@ -35,6 +36,7 @@ export class UserController {
   constructor(
     private readonly userService: UserService,
     private readonly grpcFileClient: GrpcFileClient,
+    private readonly imageTransformService: ImageTransformService,
   ) {}
 
   @Get('me')
@@ -92,6 +94,187 @@ export class UserController {
     @Body(ValidationPipe) preferencesDto: UpdateUserPreferencesDto,
   ) {
     return this.userService.updatePreferences(req.user.id, preferencesDto);
+  }
+
+  @Get('me/avatar/sizes')
+  @ApiOperation({ summary: 'Get optimized avatar URLs in different sizes' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Optimized avatar URLs',
+    schema: {
+      type: 'object',
+      properties: {
+        thumbnail: { type: 'string', description: '40x40 avatar URL' },
+        small: { type: 'string', description: '80x80 avatar URL' },
+        medium: { type: 'string', description: '150x150 avatar URL' },
+        large: { type: 'string', description: '300x300 avatar URL' },
+        original: { type: 'string', description: 'Original avatar URL' },
+      }
+    }
+  })
+  async getOptimizedAvatarUrls(@Request() req) {
+    const user = await this.userService.getUserById(req.user.id, true);
+    
+    if (!user.avatarUrl) {
+      return {
+        thumbnail: null,
+        small: null,
+        medium: null,
+        large: null,
+        original: null
+      };
+    }
+
+    return this.imageTransformService.getAvatarSizes(user.avatarUrl);
+  }
+
+  @Get('me/avatar/responsive/:size')
+  @ApiOperation({ summary: 'Get responsive avatar URLs for different screen densities' })
+  @ApiParam({ 
+    name: 'size', 
+    description: 'Base size in pixels',
+    example: '80'
+  })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Responsive avatar URLs for different screen densities',
+    schema: {
+      type: 'object',
+      properties: {
+        '1x': { type: 'string', description: 'Standard density URL' },
+        '2x': { type: 'string', description: 'High density URL (Retina)' },
+        '3x': { type: 'string', description: 'Extra high density URL (iPhone Pro)' },
+      }
+    }
+  })
+  async getResponsiveAvatarUrls(
+    @Request() req,
+    @Param('size') size: string
+  ) {
+    const user = await this.userService.getUserById(req.user.id, true);
+    
+    if (!user.avatarUrl) {
+      return {
+        '1x': null,
+        '2x': null,
+        '3x': null
+      };
+    }
+
+    const baseSize = parseInt(size, 10);
+    if (isNaN(baseSize) || baseSize < 10 || baseSize > 500) {
+      throw new BadRequestException('Size must be between 10 and 500 pixels');
+    }
+
+    return this.imageTransformService.getResponsiveAvatars(user.avatarUrl, baseSize);
+  }
+
+  @Get('me/onboarding-status')
+  @ApiOperation({ summary: 'Get current user onboarding completion status' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Onboarding status information',
+    schema: {
+      type: 'object',
+      properties: {
+        isComplete: { type: 'boolean', description: 'Whether onboarding is complete' },
+        completionPercentage: { type: 'number', description: 'Completion percentage (0-100)' },
+        missingSteps: { 
+          type: 'array', 
+          items: { type: 'string' },
+          description: 'List of missing onboarding steps'
+        },
+        nextStep: { type: 'string', description: 'Next recommended step' }
+      }
+    }
+  })
+  async getOnboardingStatus(@Request() req) {
+    const user = await this.userService.getUserById(req.user.id, true);
+    
+    const missingSteps: string[] = [];
+    let completedSteps = 0;
+    const totalSteps = 4;
+
+    // Check each onboarding step
+    if (user.emailVerified) {
+      completedSteps++;
+    } else {
+      missingSteps.push('email-verification');
+    }
+
+    const hasBasicProfile = user.profile?.bio || user.profile?.location || user.profile?.website;
+    if (hasBasicProfile) {
+      completedSteps++;
+    } else {
+      missingSteps.push('profile-setup');
+    }
+
+    if (user.avatarUrl) {
+      completedSteps++;
+    } else {
+      missingSteps.push('avatar-upload');
+    }
+
+    const hasInterests = user.interests && user.interests.length > 0;
+    if (hasInterests) {
+      completedSteps++;
+    } else {
+      missingSteps.push('interests-selection');
+    }
+
+    const completionPercentage = Math.round((completedSteps / totalSteps) * 100);
+    
+    // Use the entity's getter for consistency
+    const isComplete = user.isOnboardingComplete;
+
+    // Determine next step
+    const getNextStep = (): string | null => {
+      if (missingSteps.includes('email-verification')) return 'email-verification';
+      if (missingSteps.includes('profile-setup')) return 'profile-setup';
+      if (missingSteps.includes('avatar-upload')) return 'avatar-upload';
+      if (missingSteps.includes('interests-selection')) return 'interests-selection';
+      return null;
+    };
+
+    return {
+      isComplete,
+      completionPercentage,
+      missingSteps,
+      nextStep: getNextStep()
+    };
+  }
+
+  @Get(':userId/avatar/sizes')
+  @ApiOperation({ summary: 'Get optimized avatar URLs for any user' })
+  @ApiParam({ name: 'userId', description: 'User ID to get avatar sizes for' })
+  @ApiResponse({
+    status: HttpStatus.OK,
+    description: 'Optimized avatar URLs for specified user',
+    schema: {
+      type: 'object',
+      properties: {
+        thumbnail: { type: 'string', description: '40x40 avatar URL' },
+        small: { type: 'string', description: '80x80 avatar URL' },
+        medium: { type: 'string', description: '150x150 avatar URL' },
+        large: { type: 'string', description: '300x300 avatar URL' },
+        original: { type: 'string', description: 'Original avatar URL' },
+      }
+    }
+  })
+  async getUserAvatarSizes(@Param('userId') userId: string) {
+    const user = await this.userService.getUserById(userId, false); // Public data only
+    
+    if (!user.avatarUrl) {
+      return {
+        thumbnail: null,
+        small: null,
+        medium: null,
+        large: null,
+        original: null
+      };
+    }
+
+    return this.imageTransformService.getAvatarSizes(user.avatarUrl);
   }
 
   @Post('me/avatar')

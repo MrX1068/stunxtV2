@@ -5,6 +5,7 @@ import { StatusBar } from "expo-status-bar";
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { VStack, HStack, Box, Heading, Text, Button, ButtonText } from "@/components/ui";
 import { useApiStore } from "@/stores/api";
+import { useProfile } from "@/stores/auth";
 
 interface Interest {
   id: string;
@@ -37,6 +38,7 @@ export default function InterestSelectionScreen() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const apiStore = useApiStore();
+  const { refreshUserData } = useProfile();
   const insets = useSafeAreaInsets();
 
   const toggleInterest = (interestId: string) => {
@@ -57,13 +59,16 @@ export default function InterestSelectionScreen() {
     setError("");
 
     try {
-      // Save interests to user preferences using the correct field structure
+      // Save interests to user preferences - backend will determine onboarding completion
       await apiStore.put('/users/me/preferences', {
         metadata: {
-          interests: selectedInterests,
-          onboardingCompleted: true
+          interests: selectedInterests
+          // REMOVED: onboardingCompleted - backend determines this automatically
         }
       });
+      
+      // Refresh user data in auth store to get updated preferences and onboarding status
+      await refreshUserData();
       
       // Navigate to main app
       router.replace("/");

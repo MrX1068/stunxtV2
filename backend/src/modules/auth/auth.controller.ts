@@ -258,10 +258,33 @@ export class AuthController {
     @Body(ValidationPipe) refreshTokenDto: RefreshTokenDto,
     @Req() req: Request,
   ): Promise<AuthTokens> {
+    console.log('🔄 REFRESH TOKEN REQUEST RECEIVED:', {
+      timestamp: new Date().toISOString(),
+      refreshToken: refreshTokenDto.refreshToken?.substring(0, 20) + '...',
+      userAgent: req.get('User-Agent'),
+      ip: this.getClientIp(req)
+    });
+
     const ipAddress = this.getClientIp(req);
     const userAgent = req.get('User-Agent') || 'Unknown';
 
-    return this.authService.refreshTokens(refreshTokenDto, ipAddress, userAgent);
+    try {
+      const result = await this.authService.refreshTokens(refreshTokenDto, ipAddress, userAgent);
+      console.log('✅ REFRESH TOKEN SUCCESS:', {
+        timestamp: new Date().toISOString(),
+        newAccessToken: result.accessToken?.substring(0, 20) + '...',
+        newRefreshToken: result.refreshToken?.substring(0, 20) + '...',
+        expiresIn: result.expiresIn
+      });
+      return result;
+    } catch (error) {
+      console.log('❌ REFRESH TOKEN FAILED:', {
+        timestamp: new Date().toISOString(),
+        error: error.message,
+        stack: error.stack
+      });
+      throw error;
+    }
   }
 
   @UseGuards(JwtAuthGuard)
@@ -571,17 +594,36 @@ export class AuthController {
     },
   })
   async checkEmail(
-    @Body(ValidationPipe) checkEmailDto: CheckEmailDto,
+    @Body() body: { email?: string },
   ): Promise<{ exists: boolean; message: string }> {
-    if (!checkEmailDto.email) {
-      throw new BadRequestException('Email parameter is required');
+    if (!body.email) {
+      return {
+        exists: false,
+        message: 'Email parameter is required',
+      };
     }
 
-    const exists = await this.authService.checkEmailExists(checkEmailDto.email);
-    return {
-      exists,
-      message: exists ? 'Email is already registered' : 'Email is available',
-    };
+    // Basic email validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(body.email)) {
+      return {
+        exists: false,
+        message: 'Please provide a valid email address',
+      };
+    }
+
+    try {
+      const exists = await this.authService.checkEmailExists(body.email);
+      return {
+        exists,
+        message: exists ? 'Email is already registered' : 'Email is available',
+      };
+    } catch (error) {
+      return {
+        exists: false,
+        message: 'Unable to check email availability',
+      };
+    }
   }
 
   @Public()
@@ -601,17 +643,51 @@ export class AuthController {
     },
   })
   async checkUsername(
-    @Body(ValidationPipe) checkUsernameDto: CheckUsernameDto,
+    @Body() body: { username?: string },
   ): Promise<{ exists: boolean; message: string }> {
-    if (!checkUsernameDto.username) {
-      throw new BadRequestException('Username parameter is required');
+    if (!body.username) {
+      return {
+        exists: false,
+        message: 'Username parameter is required',
+      };
     }
 
-    const exists = await this.authService.checkUsernameExists(checkUsernameDto.username);
-    return {
-      exists,
-      message: exists ? 'Username is already taken' : 'Username is available',
-    };
+    // Basic validation checks
+    if (body.username.length < 3) {
+      return {
+        exists: false,
+        message: 'Username must be at least 3 characters long',
+      };
+    }
+
+    if (body.username.length > 50) {
+      return {
+        exists: false,
+        message: 'Username cannot exceed 50 characters',
+      };
+    }
+
+    // Username format validation
+    const usernameRegex = /^[a-zA-Z0-9_-]+$/;
+    if (!usernameRegex.test(body.username)) {
+      return {
+        exists: false,
+        message: 'Username can only contain letters, numbers, underscores, and hyphens',
+      };
+    }
+
+    try {
+      const exists = await this.authService.checkUsernameExists(body.username);
+      return {
+        exists,
+        message: exists ? 'Username is already taken' : 'Username is available',
+      };
+    } catch (error) {
+      return {
+        exists: false,
+        message: 'Unable to check username availability',
+      };
+    }
   }
 
   /**

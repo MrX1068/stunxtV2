@@ -13,6 +13,7 @@ import {
 import { useTheme } from '@/providers/ThemeContext';
 import { useAuth } from '@/stores';
 import { ThemeToggle } from '@/components/ThemeToggle';
+import { ThemeDebugPanel } from '@/components/debug/ThemeDebugPanel';
 
 interface SettingItemProps {
   title: string;
@@ -167,6 +168,16 @@ export default function SettingsScreen() {
               </VStack>
             </Box>
           </VStack>
+
+          {/* 🐛 Debug Panel - only in development */}
+          {__DEV__ && (
+            <VStack space="md">
+              <Heading size="md" className="font-semibold text-typography-900">
+                🛠️ Developer Tools
+              </Heading>
+              <ThemeDebugPanel />
+            </VStack>
+          )}
 
           {/* General Settings */}
           <VStack space="md">

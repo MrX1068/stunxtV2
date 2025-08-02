@@ -21,9 +21,16 @@ export class LoggingInterceptor implements NestInterceptor {
     const startTime = Date.now();
 
     // Log request
-    this.logger.log(
-      `Incoming Request: ${method} ${url} - IP: ${ip} - User-Agent: ${userAgent}`,
-    );
+    const isAuthRequest = url.includes('/auth/');
+    if (isAuthRequest) {
+      this.logger.log(
+        `🔐 AUTH REQUEST: ${method} ${url} - IP: ${ip} - User-Agent: ${userAgent}`,
+      );
+    } else {
+      this.logger.log(
+        `Incoming Request: ${method} ${url} - IP: ${ip} - User-Agent: ${userAgent}`,
+      );
+    }
 
     return next.handle().pipe(
       tap({
@@ -32,18 +39,34 @@ export class LoggingInterceptor implements NestInterceptor {
           const duration = endTime - startTime;
           const { statusCode } = response;
           
-          this.logger.log(
-            `Outgoing Response: ${method} ${url} - ${statusCode} - ${duration}ms`,
-          );
+          if (isAuthRequest) {
+            this.logger.log(
+              `✅ AUTH SUCCESS: ${method} ${url} - ${statusCode} - ${duration}ms`,
+            );
+          } else {
+            this.logger.log(
+              `Outgoing Response: ${method} ${url} - ${statusCode} - ${duration}ms`,
+            );
+          }
         },
         error: (error) => {
           const endTime = Date.now();
           const duration = endTime - startTime;
           const { statusCode } = response;
           
-          this.logger.error(
-            `Request Failed: ${method} ${url} - ${statusCode} - ${duration}ms - Error: ${error.message}`,
-          );
+          if (statusCode === 401) {
+            this.logger.error(
+              `🚫 UNAUTHORIZED: ${method} ${url} - ${statusCode} - ${duration}ms - Error: ${error.message}`,
+            );
+          } else if (isAuthRequest) {
+            this.logger.error(
+              `❌ AUTH FAILED: ${method} ${url} - ${statusCode} - ${duration}ms - Error: ${error.message}`,
+            );
+          } else {
+            this.logger.error(
+              `Request Failed: ${method} ${url} - ${statusCode} - ${duration}ms - Error: ${error.message}`,
+            );
+          }
         },
       }),
     );

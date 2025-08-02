@@ -50,7 +50,7 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       avatarUrl: user.avatarUrl,
       bio: user.bio,
       location: user.location,
-      websiteUrl: user.websiteUrl,
+      websiteUrl: user.website, // Use website virtual property
       lastLoginAt: user.lastLoginAt,
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,

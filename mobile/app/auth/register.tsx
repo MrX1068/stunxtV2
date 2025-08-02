@@ -89,6 +89,22 @@ export default function RegisterScreen() {
         return;
       }
     }
+
+    // Additional validation for username format
+    if (field === 'username') {
+      const usernameRegex = /^[a-zA-Z0-9_-]+$/;
+      if (!usernameRegex.test(value)) {
+        setFieldStatus(prev => ({
+          ...prev,
+          [field]: { 
+            checking: false, 
+            available: false, 
+            message: 'Username can only contain letters, numbers, underscores, and hyphens' 
+          }
+        }));
+        return;
+      }
+    }
     
     try {
       // Set checking status
@@ -103,9 +119,9 @@ export default function RegisterScreen() {
       
       if (result.success) {
         const exists = result?.data?.exists;
-        const message = exists 
-          ? result?.data?.message || `${field === 'email' ? 'Email' : 'Username'} is already taken`
-          : `${field === 'email' ? 'Email' : 'Username'} is available`;
+        const message = result?.data?.message || (exists 
+          ? `${field === 'email' ? 'Email' : 'Username'} is already taken`
+          : `${field === 'email' ? 'Email' : 'Username'} is available`);
         
         setFieldStatus(prev => ({
           ...prev,
@@ -116,11 +132,11 @@ export default function RegisterScreen() {
           }
         }));
         
-        // Update validation errors only for taken fields
-        if (exists) {
+        // Update validation errors only for taken fields or validation errors
+        if (exists || (!exists && message.includes('must be') || message.includes('can only') || message.includes('valid'))) {
           setValidationErrors(prev => ({
             ...prev,
-            [field]: result?.data?.message || `${field === 'email' ? 'Email' : 'Username'} is already taken`
+            [field]: message
           }));
         } else {
           setValidationErrors(prev => {
@@ -129,15 +145,27 @@ export default function RegisterScreen() {
             return newErrors;
           });
         }
+      } else {
+        // Handle API response error
+        const errorMessage = result?.data?.message || 'Unable to check availability';
+        setFieldStatus(prev => ({
+          ...prev,
+          [field]: { 
+            checking: false, 
+            available: null, 
+            message: errorMessage
+          }
+        }));
       }
     } catch (error) {
       console.warn(`${field} duplicate check failed:`, error);
+      // Don't show confusing error messages to user
       setFieldStatus(prev => ({
         ...prev,
         [field]: { 
           checking: false, 
           available: null, 
-          message: 'Unable to check availability' 
+          message: 'Unable to check availability at this time'
         }
       }));
     }
@@ -151,6 +179,12 @@ export default function RegisterScreen() {
     }
     if (!formData.username.trim()) {
       errors.username = 'Username is required';
+    } else if (formData.username.length < 3) {
+      errors.username = 'Username must be at least 3 characters long';
+    } else if (formData.username.length > 50) {
+      errors.username = 'Username cannot exceed 50 characters';
+    } else if (!/^[a-zA-Z0-9_-]+$/.test(formData.username)) {
+      errors.username = 'Username can only contain letters, numbers, underscores, and hyphens';
     }
     if (!formData.email.trim()) {
       errors.email = 'Email is required';

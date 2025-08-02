@@ -31,7 +31,7 @@ interface SpaceListProps {
 }
 
 export function SpaceList({
-  spaces,
+  spaces = [], // 🔧 Add default empty array here too
   isLoading = false,
   onRefresh,
   onSpacePress,
@@ -47,7 +47,10 @@ export function SpaceList({
 }: SpaceListProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
-  const filteredSpaces = spaces.filter(space =>
+  // 🔧 Ensure spaces is always an array
+  const safeSpaces = Array.isArray(spaces) ? spaces : [];
+  
+  const filteredSpaces = safeSpaces.filter(space =>
     space.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     space.description?.toLowerCase().includes(searchQuery.toLowerCase())
   );
