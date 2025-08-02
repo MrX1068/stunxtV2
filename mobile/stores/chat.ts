@@ -3,6 +3,7 @@ import { immer } from 'zustand/middleware/immer';
 import { socketService, SocketMessage, TypingIndicator, ConnectionStatus } from './socket';
 import { useApiStore } from './api';
 import { useAuth } from './auth';
+import { messageCache } from './messageCache';
 
 export interface ChatConversation {
   id: string;
@@ -106,7 +107,9 @@ export interface ChatActions {
   refreshConnectionStatus: () => void;
   
   // Space integration helpers
-  syncSpaceMessages: (spaceId: string, spaceMessages: any[]) => void;
+  syncSpaceMessages: (spaceId: string, spaceMessages: any[]) => Promise<void>;
+  clearSpaceChatState: (spaceId: string) => Promise<void>;
+  loadMessagesFromCache: (conversationId: string) => Promise<SocketMessage[]>;
 }
 
 type ChatStore = ChatState & ChatActions;
@@ -139,149 +142,97 @@ export const useChatStore = create<ChatStore>()(
         state.error = null;
       });
 
+      // Setup socket event handlers immediately for faster UI updates
+      socketService.setEventHandlers({
+        onConnectSuccess: (data) => {
+          console.log('✅ ChatStore: Connection success event received', data);
+          set((state) => {
+            state.connectionStatus.connected = true;
+            state.connectionStatus.connecting = false;
+            state.isConnecting = false;
+            state.connectionStatus.lastConnected = data.timestamp;
+          });
+        },
+        onConnectError: (error) => {
+          console.error('❌ ChatStore: Connection error event received', error);
+          set((state) => {
+            state.connectionStatus.connected = false;
+            state.connectionStatus.connecting = false;
+            state.isConnecting = false;
+            state.error = error.message || 'Connection failed';
+          });
+        },
+        onDisconnect: (reason) => {
+          console.log('🔌 ChatStore: Disconnected', reason);
+          set((state) => {
+            state.connectionStatus.connected = false;
+            state.connectionStatus.connecting = false;
+            state.isConnecting = false;
+          });
+        },
+        onMessage: (message: SocketMessage) => {
+          console.log('📨 ChatStore: Received new message', message);
+          set((state) => {
+            const { conversationId } = message;
+            if (!state.messages[conversationId]) {
+              state.messages[conversationId] = [];
+            }
+            // Avoid duplicates
+            if (!state.messages[conversationId].some(m => m.id === message.id)) {
+              state.messages[conversationId].push(message);
+            }
+          });
+          
+          // Cache the message immediately for persistence
+          messageCache.addMessageToCache(message.conversationId, message);
+        },
+        onMessageSent: (data: { optimisticId: string; message: any; success: boolean }) => {
+          console.log('✅ ChatStore: Message sent confirmation', data);
+          set((state) => {
+            const { conversationId } = data.message;
+            const convoMessages = state.messages[conversationId];
+            if (convoMessages) {
+              const msgIndex = convoMessages.findIndex(m => m.id === data.optimisticId);
+              if (msgIndex !== -1) {
+                // Update message with server data
+                state.messages[conversationId][msgIndex] = {
+                  ...data.message,
+                  status: 'sent',
+                };
+              }
+            }
+          });
+          
+          // Update the message in cache
+          messageCache.updateMessageInCache(data.message.conversationId, {
+            ...data.message,
+            status: 'sent',
+          });
+        },
+        onMessageError: (data: { optimisticId: string; error: string; success: boolean }) => {
+          console.error('❌ ChatStore: Message send error', data);
+          set((state) => {
+            // Find conversation and message to update status
+            for (const convoId in state.messages) {
+              const msgIndex = state.messages[convoId].findIndex(m => m.id === data.optimisticId);
+              if (msgIndex !== -1) {
+                state.messages[convoId][msgIndex].status = 'failed';
+                break;
+              }
+            }
+          });
+        },
+        // Add other handlers as needed (typing, status, etc.)
+      });
+
       try {
-        // Setup socket event handlers
-        socketService.setEventHandlers({
-          onMessage: (message: SocketMessage) => {
-            set((state) => {
-              if (!state.messages[message.conversationId]) {
-                state.messages[message.conversationId] = [];
-              }
-              
-              // Check if message already exists (avoid duplicates)
-              const existingIndex = state.messages[message.conversationId].findIndex(
-                (m: SocketMessage) => m.id === message.id || m.optimisticId === message.optimisticId
-              );
-              
-              if (existingIndex >= 0) {
-                // Update existing message
-                state.messages[message.conversationId][existingIndex] = message;
-              } else {
-                // Add new message
-                state.messages[message.conversationId].push(message);
-                // Sort by timestamp
-                state.messages[message.conversationId].sort(
-                  (a: SocketMessage, b: SocketMessage) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
-                );
-              }
-
-              // Update conversation last message
-              const conversationIndex = state.conversations.findIndex((c: ChatConversation) => c.id === message.conversationId);
-              if (conversationIndex >= 0) {
-                state.conversations[conversationIndex].lastMessage = message;
-                if (message.senderId !== userId) {
-                  state.conversations[conversationIndex].unreadCount += 1;
-                }
-              }
-            });
-          },
-
-          onMessageStatus: (data: { messageId: string; status: string; userId: string }) => {
-            set((state) => {
-              // Update message status across all conversations
-              Object.keys(state.messages).forEach(conversationId => {
-                const messageIndex = state.messages[conversationId].findIndex(
-                  (m: SocketMessage) => m.id === data.messageId || m.optimisticId === data.messageId
-                );
-                if (messageIndex >= 0) {
-                  state.messages[conversationId][messageIndex].status = data.status as any;
-                }
-              });
-            });
-          },
-
-          onTyping: (data: TypingIndicator, isTyping: boolean) => {
-            set((state) => {
-              if (!state.typingUsers[data.conversationId]) {
-                state.typingUsers[data.conversationId] = [];
-              }
-              
-              const typingList = state.typingUsers[data.conversationId];
-              const existingIndex = typingList.findIndex((t: TypingIndicator) => t.userId === data.userId);
-              
-              if (isTyping) {
-                if (existingIndex === -1) {
-                  typingList.push(data);
-                }
-              } else {
-                if (existingIndex >= 0) {
-                  typingList.splice(existingIndex, 1);
-                }
-              }
-            });
-          },
-
-          onUserStatus: (data: { userId: string; status: 'online' | 'offline' }) => {
-            set((state) => {
-              // Update user status in all conversations
-              state.conversations.forEach((conversation: ChatConversation) => {
-                const participantIndex = conversation.participants.findIndex((p: ChatParticipant) => p.id === data.userId);
-                if (participantIndex >= 0) {
-                  conversation.participants[participantIndex].status = data.status;
-                  if (data.status === 'offline') {
-                    conversation.participants[participantIndex].lastSeen = new Date().toISOString();
-                  }
-                }
-              });
-            });
-          },
-
-          onMessageSent: (data: { optimisticId: string; message: any; success: boolean }) => {
-            console.log('✅ Message sent confirmation received:', data);
-            set((state) => {
-              // Find and update optimistic message with real data
-              Object.keys(state.messages).forEach(conversationId => {
-                const messageIndex = state.messages[conversationId].findIndex(
-                  (m: SocketMessage) => m.optimisticId === data.optimisticId
-                );
-                if (messageIndex >= 0) {
-                  // Replace optimistic message with real message data
-                  state.messages[conversationId][messageIndex] = {
-                    ...data.message,
-                    status: 'sent' as const,
-                  };
-                }
-              });
-            });
-          },
-
-          onMessageError: (data: { optimisticId: string; error: string; success: boolean }) => {
-            console.log('❌ Message send error received:', data);
-            set((state) => {
-              // Find and mark optimistic message as failed
-              Object.keys(state.messages).forEach(conversationId => {
-                const messageIndex = state.messages[conversationId].findIndex(
-                  (m: SocketMessage) => m.optimisticId === data.optimisticId
-                );
-                if (messageIndex >= 0) {
-                  state.messages[conversationId][messageIndex].status = 'failed';
-                }
-              });
-              
-              // Set error state
-              state.error = `Failed to send message: ${data.error}`;
-            });
-          },
-        });
-
         await socketService.connect(userId);
-        
-        console.log('🔄 WebSocket connection completed, updating state...');
-        set((state) => {
-          state.isConnecting = false;
-          state.connectionStatus = socketService.getConnectionStatus();
-        });
-        
-        console.log('✅ Chat store connection status updated:', socketService.getConnectionStatus());
-        
-        // Fetch conversations after connection
-        get().fetchConversations();
-        
+        console.log('SocketService.connect() promise resolved');
       } catch (error) {
+        console.error('Error during socket connection in ChatStore:', error);
         set((state) => {
           state.isConnecting = false;
           state.error = error instanceof Error ? error.message : 'Connection failed';
-          state.connectionStatus = socketService.getConnectionStatus();
         });
       }
     },
@@ -300,13 +251,8 @@ export const useChatStore = create<ChatStore>()(
       const status = socketService.getConnectionStatus();
       // Update local state if needed
       set((state) => {
-        if (state.connectionStatus.connected !== status.connected) {
-          console.log('🔄 Connection status changed:', { 
-            from: state.connectionStatus.connected, 
-            to: status.connected 
-          });
-          state.connectionStatus = status;
-        }
+        state.connectionStatus = status;
+        state.isConnecting = status.connecting;
       });
       return status;
     },
@@ -593,10 +539,13 @@ export const useChatStore = create<ChatStore>()(
         if (conversationIndex >= 0) {
           state.conversations[conversationIndex].lastMessage = optimisticMessage;
         }
-        
+
         // Clear reply state
         state.replyingTo = null;
       });
+
+      // Cache the optimistic message immediately for persistence
+      messageCache.addMessageToCache(activeConversationId, optimisticMessage);
 
       return optimisticId;
     },
@@ -672,7 +621,10 @@ export const useChatStore = create<ChatStore>()(
         }
       });
 
-      console.log('✅ [Chat Store] Optimistic message added to state');
+      // Cache the optimistic message immediately for persistence
+      messageCache.addMessageToCache(conversationId, optimisticMessage);
+
+      console.log('✅ [Chat Store] Optimistic message added to state and cached');
       return optimisticId;
     },
 
@@ -820,12 +772,16 @@ export const useChatStore = create<ChatStore>()(
     },
 
     // Space integration helpers
-    syncSpaceMessages: (spaceId: string, spaceMessages: any[]) => {
+    syncSpaceMessages: async (spaceId: string, spaceMessages: any[]) => {
       const conversationId = `space-${spaceId}`;
-      console.log('🔄 Syncing space messages:', { spaceId, conversationId, messageCount: spaceMessages.length });
-      
-      // Convert space messages to chat messages format
-      const chatMessages: SocketMessage[] = spaceMessages.map((msg, index) => ({
+      console.log('🔄 [Professional Cache] Syncing space messages:', {
+        spaceId,
+        conversationId,
+        incomingMessageCount: spaceMessages.length,
+      });
+
+      // Convert incoming space messages to the standard chat message format
+      const incomingChatMessages: SocketMessage[] = spaceMessages.map((msg, index) => ({
         id: msg.id || `space_msg_${index}`,
         content: msg.content || msg.message || '',
         type: 'text' as const,
@@ -837,11 +793,72 @@ export const useChatStore = create<ChatStore>()(
         status: 'delivered' as const,
       }));
 
+      // Cache messages using the professional cache system
+      await messageCache.setConversationMessages(conversationId, incomingChatMessages);
+
+      // Update in-memory state by loading from cache
+      // This ensures UI consistency and prevents race conditions
+      const cachedMessages = await messageCache.getConversationMessages(conversationId);
+      
       set((state) => {
-        state.messages[conversationId] = chatMessages;
+        state.messages[conversationId] = cachedMessages;
+        console.log('✅ [Professional Cache] Messages synced and cached:', {
+          finalMessageCount: cachedMessages.length,
+          conversationId
+        });
+      });
+    },
+
+    clearSpaceChatState: async (spaceId: string) => {
+      const conversationId = `space-${spaceId}`;
+      console.log('🧹 [Professional Cache] Clearing chat state for space:', { spaceId, conversationId });
+      
+      // Clear from secure cache
+      await messageCache.clearConversationCache(conversationId);
+      
+      set((state) => {
+        // Remove from in-memory state
+        if (state.messages[conversationId]) {
+          delete state.messages[conversationId];
+        }
+        
+        // If this conversation was active, deactivate it
+        if (state.activeConversationId === conversationId) {
+          state.activeConversationId = null;
+          state.activeConversation = null;
+        }
+
+        // Remove the conversation entry itself
+        const convoIndex = state.conversations.findIndex(c => c.id === conversationId);
+        if (convoIndex > -1) {
+          state.conversations.splice(convoIndex, 1);
+        }
       });
       
-      console.log('✅ Space messages synced to chat store:', chatMessages.length);
+      console.log('✅ [Professional Cache] Space chat state cleared successfully');
+    },
+
+    // Load messages from cache when entering a conversation
+    loadMessagesFromCache: async (conversationId: string) => {
+      console.log('📱 [Professional Cache] Loading messages from cache:', conversationId);
+      
+      try {
+        const cachedMessages = await messageCache.getConversationMessages(conversationId);
+        
+        set((state) => {
+          state.messages[conversationId] = cachedMessages;
+        });
+        
+        console.log('✅ [Professional Cache] Messages loaded from cache:', {
+          conversationId,
+          messageCount: cachedMessages.length
+        });
+        
+        return cachedMessages;
+      } catch (error) {
+        console.error('❌ [Professional Cache] Error loading messages from cache:', error);
+        return [];
+      }
     },
   }))
 );

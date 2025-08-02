@@ -42,6 +42,7 @@ export default function SpaceDetailScreen() {
   const [typingTimeout, setTypingTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
+    // This effect now handles both setup and cleanup.
     if (id) {
       fetchSpace(id);
     }

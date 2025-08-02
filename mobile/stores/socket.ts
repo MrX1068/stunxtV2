@@ -46,6 +46,18 @@ class SocketService {
   private maxReconnectAttempts = 5;
   private reconnectDelay = 1000;
 
+  // Event handler callbacks
+  private handleConnect: () => void = () => {};
+  private handleDisconnect: (reason: string) => void = () => {};
+  private handleConnectSuccess: (data: any) => void = () => {};
+  private handleConnectError: (error: any) => void = () => {};
+  private handleIncomingMessage: (message: SocketMessage) => void = () => {};
+  private handleMessageStatusUpdate: (data: { messageId: string; status: string; userId: string }) => void = () => {};
+  private handleTypingIndicator: (data: TypingIndicator, isTyping: boolean) => void = () => {};
+  private handleUserStatusUpdate: (data: { userId: string; status: 'online' | 'offline' }) => void = () => {};
+  private handleMessageSentConfirmation: (data: { optimisticId: string; message: any; success: boolean }) => void = () => {};
+  private handleMessageSendError: (data: { optimisticId: string; error: string; success: boolean }) => void = () => {};
+
   async connect(userId: string): Promise<void> {
     if (this.socket?.connected) {
       console.log('🔗 Socket already connected, skipping');
@@ -112,82 +124,61 @@ class SocketService {
     this.socket.on('connect', () => {
       const baseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
       console.log('🔗 WebSocket connected successfully');
-      console.log('📡 Socket ID:', this.socket?.id);
-      console.log('🌐 Connected to:', `${baseUrl}/messaging`);
       this.connectionStatus.connected = true;
       this.connectionStatus.connecting = false;
       this.connectionStatus.error = undefined;
       this.connectionStatus.lastConnected = new Date().toISOString();
       this.connectionStatus.reconnectAttempts = 0;
-
-      // Process queued messages
+      this.handleConnect(); // Use callback
       this.processMessageQueue();
     });
 
-    // Enhanced connection success event with timing information
     this.socket.on('connection_success', (data: { userId: string; socketId: string; connectionTime: number; timestamp: string }) => {
       console.log('✅ Connection success event received:', data);
       this.connectionStatus.connected = true;
       this.connectionStatus.connecting = false;
       this.connectionStatus.error = undefined;
       this.connectionStatus.lastConnected = data.timestamp;
-      
-      // Notify stores about successful connection
-      const { useChatStore } = require('./chat');
-      const chatStore = useChatStore.getState();
-      if (chatStore.setConnectionStatus) {
-        chatStore.setConnectionStatus(true);
-      }
+      this.handleConnectSuccess(data); // Use callback
     });
 
-    // Enhanced connection error handling
     this.socket.on('connection_error', (data: { error: string; connectionTime: number }) => {
       console.error('❌ Connection error event received:', data);
       this.connectionStatus.connected = false;
       this.connectionStatus.connecting = false;
       this.connectionStatus.error = data.error;
-      
-      // Notify stores about connection failure
-      const { useChatStore } = require('./chat');
-      const chatStore = useChatStore.getState();
-      if (chatStore.setConnectionStatus) {
-        chatStore.setConnectionStatus(false);
-      }
+      this.handleConnectError(data); // Use callback
     });
 
     this.socket.on('disconnect', (reason: string) => {
       console.log('❌ WebSocket disconnected:', reason);
-      console.log('🔌 Disconnect timestamp:', new Date().toISOString());
       this.connectionStatus.connected = false;
       this.connectionStatus.connecting = false;
+      this.handleDisconnect(reason); // Use callback
       
       if (reason === 'io server disconnect') {
-        // Server initiated disconnect, try to reconnect
         console.log('🔄 Server initiated disconnect, scheduling reconnect...');
         this.scheduleReconnect();
       }
     });
 
     this.socket.on('connect_error', (error: any) => {
-      console.error('🚫 WebSocket connection error:', error);
-      console.error('⚠️ Error details:', error.message);
-      console.error('🔄 Reconnect attempt:', this.connectionStatus.reconnectAttempts + 1);
+      console.error('🚫 WebSocket connection error:', error.message);
       this.connectionStatus.connecting = false;
       this.connectionStatus.error = error.message;
       this.connectionStatus.reconnectAttempts++;
+      this.handleConnectError(error); // Use callback
       
-      // If the error is authentication-related, don't try to reconnect continuously
-      if (error.message && (error.message.includes('unauthorized') || error.message.includes('token') || error.message.includes('auth'))) {
-        console.error('❌ Authentication error detected, stopping reconnection attempts');
+      if (error.message?.includes('unauthorized')) {
+        console.error('❌ Auth error, stopping reconnection.');
         this.connectionStatus.reconnectAttempts = this.maxReconnectAttempts;
         return;
       }
       
       if (this.connectionStatus.reconnectAttempts < this.maxReconnectAttempts) {
-        console.log('⏳ Scheduling reconnect in', this.reconnectDelay, 'ms');
         this.scheduleReconnect();
       } else {
-        console.error('❌ Max reconnect attempts reached, giving up');
+        console.error('❌ Max reconnect attempts reached.');
       }
     });
 
@@ -356,33 +347,12 @@ class SocketService {
     return { ...this.connectionStatus };
   }
 
-  // Event handlers (to be overridden by the chat store)
-  private handleIncomingMessage(message: SocketMessage): void {
-    // Will be overridden by chat store
-  }
-
-  private handleMessageStatusUpdate(data: { messageId: string; status: string; userId: string }): void {
-    // Will be overridden by chat store
-  }
-
-  private handleTypingIndicator(data: TypingIndicator, isTyping: boolean): void {
-    // Will be overridden by chat store
-  }
-
-  private handleUserStatusUpdate(data: { userId: string; status: 'online' | 'offline' }): void {
-    // Will be overridden by chat store
-  }
-
-  private handleMessageSentConfirmation(data: { optimisticId: string; message: any; success: boolean }): void {
-    // Will be overridden by chat store
-  }
-
-  private handleMessageSendError(data: { optimisticId: string; error: string; success: boolean }): void {
-    // Will be overridden by chat store
-  }
-
   // Allow chat store to override event handlers
   setEventHandlers(handlers: {
+    onConnect?: () => void;
+    onDisconnect?: (reason: string) => void;
+    onConnectSuccess?: (data: any) => void;
+    onConnectError?: (error: any) => void;
     onMessage?: (message: SocketMessage) => void;
     onMessageStatus?: (data: { messageId: string; status: string; userId: string }) => void;
     onTyping?: (data: TypingIndicator, isTyping: boolean) => void;
@@ -390,24 +360,16 @@ class SocketService {
     onMessageSent?: (data: { optimisticId: string; message: any; success: boolean }) => void;
     onMessageError?: (data: { optimisticId: string; error: string; success: boolean }) => void;
   }): void {
-    if (handlers.onMessage) {
-      this.handleIncomingMessage = handlers.onMessage;
-    }
-    if (handlers.onMessageStatus) {
-      this.handleMessageStatusUpdate = handlers.onMessageStatus;
-    }
-    if (handlers.onTyping) {
-      this.handleTypingIndicator = handlers.onTyping;
-    }
-    if (handlers.onUserStatus) {
-      this.handleUserStatusUpdate = handlers.onUserStatus;
-    }
-    if (handlers.onMessageSent) {
-      this.handleMessageSentConfirmation = handlers.onMessageSent;
-    }
-    if (handlers.onMessageError) {
-      this.handleMessageSendError = handlers.onMessageError;
-    }
+    if (handlers.onConnect) this.handleConnect = handlers.onConnect;
+    if (handlers.onDisconnect) this.handleDisconnect = handlers.onDisconnect;
+    if (handlers.onConnectSuccess) this.handleConnectSuccess = handlers.onConnectSuccess;
+    if (handlers.onConnectError) this.handleConnectError = handlers.onConnectError;
+    if (handlers.onMessage) this.handleIncomingMessage = handlers.onMessage;
+    if (handlers.onMessageStatus) this.handleMessageStatusUpdate = handlers.onMessageStatus;
+    if (handlers.onTyping) this.handleTypingIndicator = handlers.onTyping;
+    if (handlers.onUserStatus) this.handleUserStatusUpdate = handlers.onUserStatus;
+    if (handlers.onMessageSent) this.handleMessageSentConfirmation = handlers.onMessageSent;
+    if (handlers.onMessageError) this.handleMessageSendError = handlers.onMessageError;
   }
 
   // ✅ Method to get current user ID for optimistic messages
