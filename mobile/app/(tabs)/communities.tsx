@@ -12,7 +12,8 @@ import {
 } from "@/components/ui";
 import { MaterialIcons } from '@expo/vector-icons';
 import { useTheme } from "@/providers/ThemeContext";
-import { useCommunities } from "@/stores";
+import { useCommunities, useAuth } from "@/stores";
+import { PermissionManager } from "@/utils/permissions";
 import { ThemeToggleAdvanced } from "@/components/ThemeToggleAdvanced";
 import { 
   CommunityList,
@@ -23,6 +24,7 @@ const { width } = Dimensions.get('window');
 
 export default function CommunitiesScreen() {
   const { isDark } = useTheme();
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'discover' | 'joined' | 'owned'>('discover');
   const [slideAnim] = useState(new Animated.Value(0));
   
@@ -39,6 +41,18 @@ export default function CommunitiesScreen() {
     leaveCommunity,
     clearErrors: clearCommunitiesErrors,
   } = useCommunities();
+
+  // 🛡️ Professional Role-Based Permissions
+  const canCreateCommunity = PermissionManager.canCreateCommunity(user);
+  
+  console.log('🔐 Community Permission Status:', {
+    userId: user?.id,
+    canCreateCommunity,
+    userRole: user?.role,
+    isVerified: user?.isVerified,
+    emailVerified: user?.emailVerified,
+    status: user?.status
+  });
 
   // Fetch data on mount
   useEffect(() => {
@@ -172,10 +186,10 @@ export default function CommunitiesScreen() {
             onCommunityPress={handleCommunityPress}
             onJoinCommunity={handleJoinCommunity}
             onLeaveCommunity={handleLeaveCommunity}
-            onCreateCommunity={handleCreateCommunity}
+            onCreateCommunity={canCreateCommunity ? handleCreateCommunity : undefined}
             title="Discover Communities"
             emptyMessage="No communities found. Be the first to create one!"
-            showCreateButton={true}
+            showCreateButton={canCreateCommunity}
             variant="default"
           />
         );
@@ -189,10 +203,10 @@ export default function CommunitiesScreen() {
             onCommunityPress={handleCommunityPress}
             onJoinCommunity={handleJoinCommunity}
             onLeaveCommunity={handleLeaveCommunity}
-            onCreateCommunity={handleCreateCommunity}
+            onCreateCommunity={canCreateCommunity ? handleCreateCommunity : undefined}
             title="Your Communities"
             emptyMessage="You haven't joined any communities yet."
-            showCreateButton={false}
+            showCreateButton={canCreateCommunity}
             variant="compact"
           />
         );
@@ -206,10 +220,10 @@ export default function CommunitiesScreen() {
             onCommunityPress={handleCommunityPress}
             onJoinCommunity={handleJoinCommunity}
             onLeaveCommunity={handleLeaveCommunity}
-            onCreateCommunity={handleCreateCommunity}
+            onCreateCommunity={canCreateCommunity ? handleCreateCommunity : undefined}
             title="Communities You Own"
             emptyMessage="You don't own any communities yet."
-            showCreateButton={true}
+            showCreateButton={canCreateCommunity}
             variant="featured"
           />
         );

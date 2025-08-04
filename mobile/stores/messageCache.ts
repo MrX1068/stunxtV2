@@ -185,6 +185,58 @@ class MessageCacheManager {
   }
 
   /**
+   * Smart merge that preserves newer messages and prevents cache regression
+   */
+  async mergeConversationMessages(conversationId: string, incomingMessages: SocketMessage[]): Promise<void> {
+    try {
+      const existingMessages = await this.getConversationMessages(conversationId);
+      
+      // Create a map of existing messages by ID for fast lookup
+      const existingMessageMap = new Map(existingMessages.map(msg => [msg.id, msg]));
+      
+      // Merge messages, preferring existing if they have the same ID
+      const mergedMessages: SocketMessage[] = [];
+      const processedIds = new Set();
+      
+      // Add all existing messages first
+      for (const msg of existingMessages) {
+        mergedMessages.push(msg);
+        processedIds.add(msg.id);
+      }
+      
+      // Add new messages that don't exist
+      for (const msg of incomingMessages) {
+        if (!processedIds.has(msg.id)) {
+          mergedMessages.push(msg);
+          processedIds.add(msg.id);
+        }
+      }
+      
+      // Sort by timestamp
+      mergedMessages.sort((a, b) => {
+        const aTime = new Date(a.timestamp || 0).getTime();
+        const bTime = new Date(b.timestamp || 0).getTime();
+        return aTime - bTime;
+      });
+      
+      // Cache the merged result
+      await this.setConversationMessages(conversationId, mergedMessages);
+      
+      console.log('🔄 MessageCache: Smart merge completed:', {
+        conversationId,
+        existingCount: existingMessages.length,
+        incomingCount: incomingMessages.length,
+        finalCount: mergedMessages.length
+      });
+    } catch (error) {
+      console.error('❌ MessageCache: Error merging messages:', {
+        conversationId,
+        error: error instanceof Error ? error.message : String(error)
+      });
+    }
+  }
+
+  /**
    * Add a single message to conversation cache (for optimistic updates)
    */
   async addMessageToCache(conversationId: string, message: SocketMessage): Promise<void> {

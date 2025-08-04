@@ -20,6 +20,12 @@ interface SpaceCardProps {
   variant?: 'default' | 'compact';
   showCommunity?: boolean;
   showActions?: boolean;
+  // 🚀 Professional Access Control
+  accessControl?: {
+    canAccess: boolean;
+    requiresCommunityJoin: boolean;
+    communityName: string;
+  };
 }
 
 const spaceIcons = {
@@ -54,6 +60,7 @@ export function SpaceCard({
   variant = 'default',
   showCommunity = false,
   showActions = true,
+  accessControl,
 }: SpaceCardProps) {
   const scaleAnim = useRef(new Animated.Value(1)).current;
 
@@ -161,35 +168,38 @@ export function SpaceCard({
 
   const renderDefault = () => (
     <Animated.View style={{ transform: [{ scale: scaleAnim }] }}>
-      <Pressable 
-        onPress={onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-      >
-        <Box className="bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-xl p-5 mb-4 shadow-lg">
-          <VStack space="lg">
-            <HStack space="lg" className="items-start">
-              <Box className="w-14 h-14 bg-gradient-to-br from-primary-400 to-primary-600 rounded-xl items-center justify-center shadow-lg">
-                <MaterialIcons 
-                  name={getCategoryIcon()} 
-                  size={24} 
-                  color="white" 
-                />
-              </Box>
-              
-              <VStack className="flex-1">
-                <HStack className="justify-between items-start">
-                  <VStack className="flex-1">
-                    <Text size="lg" className="font-bold text-gray-900 dark:text-gray-100 leading-tight">
-                      {space.name}
-                    </Text>
-                    {space.description && (
-                      <Text size="sm" className="text-gray-600 dark:text-gray-300 mt-2 leading-relaxed">
-                        {space.description}
+      <Box className="relative">
+        <Pressable 
+          onPress={accessControl?.canAccess ? onPress : undefined}
+          onPressIn={accessControl?.canAccess ? handlePressIn : undefined}
+          onPressOut={accessControl?.canAccess ? handlePressOut : undefined}
+        >
+          <Box className={`bg-white dark:bg-gray-900 border border-gray-100 dark:border-gray-800 rounded-xl p-5 mb-4 shadow-lg ${
+            accessControl?.canAccess === false ? 'opacity-60' : ''
+          }`}>
+            <VStack space="lg">
+              <HStack space="lg" className="items-start">
+                <Box className="w-14 h-14 bg-gradient-to-br from-primary-400 to-primary-600 rounded-xl items-center justify-center shadow-lg">
+                  <MaterialIcons 
+                    name={getCategoryIcon()} 
+                    size={24} 
+                    color="white" 
+                  />
+                </Box>
+                
+                <VStack className="flex-1">
+                  <HStack className="justify-between items-start">
+                    <VStack className="flex-1">
+                      <Text size="lg" className="font-bold text-gray-900 dark:text-gray-100 leading-tight">
+                        {space.name}
                       </Text>
-                    )}
-                    
-                    <HStack space="sm" className="items-center mt-3">
+                      {space.description && (
+                        <Text size="sm" className="text-gray-600 dark:text-gray-300 mt-2 leading-relaxed">
+                          {space.description}
+                        </Text>
+                      )}
+                      
+                      <HStack space="sm" className="items-center mt-3">
                       <Box className={`px-3 py-1 rounded-full ${getSpaceTypeColor().bg} ${getSpaceTypeColor().border} border`}>
                         <Text size="xs" className={`font-semibold ${getSpaceTypeColor().text}`}>
                           {space.type === 'private' ? '🔒 Private' : space.type === 'secret' ? '🕵️ Secret' : '🌍 Public'}
@@ -275,6 +285,24 @@ export function SpaceCard({
           </VStack>
         </Box>
       </Pressable>
+      
+      {/* 🚀 Professional Access Control Overlay */}
+      {accessControl?.canAccess === false && (
+        <Box className="absolute inset-0 bg-white/80 dark:bg-gray-900/80 rounded-xl flex items-center justify-center backdrop-blur-sm">
+          <VStack space="md" className="items-center px-6">
+            <Box className="w-16 h-16 bg-amber-100 dark:bg-amber-900/30 rounded-full items-center justify-center">
+              <MaterialIcons name="lock" size={32} color="#F59E0B" />
+            </Box>
+            <Text size="lg" className="font-semibold text-gray-900 dark:text-gray-100 text-center">
+              Join {accessControl.communityName} First
+            </Text>
+            <Text size="sm" className="text-gray-600 dark:text-gray-400 text-center">
+              You need to join this community to access its spaces
+            </Text>
+          </VStack>
+        </Box>
+      )}
+    </Box>
     </Animated.View>
   );
 

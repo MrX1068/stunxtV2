@@ -28,6 +28,12 @@ interface SpaceListProps {
   showCreateButton?: boolean;
   showCommunity?: boolean;
   variant?: 'default' | 'compact';
+  // 🚀 Professional Access Control
+  communityMembership?: {
+    isJoined: boolean;
+    isOwner: boolean;
+    communityName: string;
+  };
 }
 
 export function SpaceList({
@@ -44,6 +50,7 @@ export function SpaceList({
   showCreateButton = true,
   showCommunity = false,
   variant = 'default',
+  communityMembership,
 }: SpaceListProps) {
   const [searchQuery, setSearchQuery] = useState('');
 
@@ -98,18 +105,31 @@ export function SpaceList({
     </Box>
   );
 
-  const renderSpaceItem = ({ item }: { item: Space }) => (
-    <Box className="px-6">
-      <SpaceCard
-        space={item}
-        variant={variant}
-        showCommunity={showCommunity}
-        onPress={() => onSpacePress?.(item)}
-        onJoinPress={() => onJoinSpace?.(item.id)}
-        onLeavePress={() => onLeaveSpace?.(item.id)}
-      />
-    </Box>
-  );
+  const renderSpaceItem = ({ item }: { item: Space }) => {
+    // 🚀 Professional Access Control - Check community membership (prioritize ownership)
+    const canAccessSpace = !communityMembership || 
+      communityMembership.isOwner || 
+      communityMembership.isJoined;
+    
+    return (
+      <Box className="px-6">
+        <SpaceCard
+          space={item}
+          variant={variant}
+          showCommunity={showCommunity}
+          onPress={canAccessSpace ? () => onSpacePress?.(item) : undefined}
+          onJoinPress={() => onJoinSpace?.(item.id)}
+          onLeavePress={() => onLeaveSpace?.(item.id)}
+          // 🚀 Professional UX - Pass access control info
+          accessControl={{
+            canAccess: canAccessSpace,
+            requiresCommunityJoin: !canAccessSpace,
+            communityName: communityMembership?.communityName || 'community'
+          }}
+        />
+      </Box>
+    );
+  };
 
   return (
     <VStack className="flex-1">

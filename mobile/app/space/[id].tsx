@@ -11,6 +11,7 @@ import {
 } from '@/components/ui';
 import { MaterialIcons } from '@expo/vector-icons';
 import { useSpaces, useAuth, useChatStore } from '@/stores';
+import { PermissionManager } from '@/utils/permissions';
 import type { Space } from '@/stores';
 import EmojiPicker from '@/components/chat/EmojiPicker';
 
@@ -27,7 +28,13 @@ export default function SpaceDetailScreen() {
     messages, 
     connectionStatus, 
     spaceConversations,
-    syncSpaceMessages
+    syncSpaceMessages,
+    clearSpaceChatState,
+    loadMessagesFromCache,
+    retryFailedMessages,
+    typingUsers,
+    startTyping,
+    stopTyping
   } = useChatStore();
   
   const [isJoining, setIsJoining] = useState(false);
@@ -42,26 +49,62 @@ export default function SpaceDetailScreen() {
   const [typingTimeout, setTypingTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    // This effect now handles both setup and cleanup.
+    // 🚀 Professional Space Navigation Cleanup - Reset conversation state when space changes
     if (id) {
+      // Clear previous space conversation state immediately using professional cache system
+      const previousConversationId = conversationId;
+      setConversationId(null);
+      setIsConnecting(false);
+      
+      // Clear previous space chat state if it exists
+      if (previousConversationId) {
+        console.log('🧹 Clearing previous space chat state:', previousConversationId);
+        clearSpaceChatState(previousConversationId);
+      }
+      
+      // Fetch new space data
       fetchSpace(id);
+      
+      console.log('🔄 Professional space navigation cleanup completed for space:', id);
     }
+    
+    // Cleanup function when component unmounts or space ID changes
+    return () => {
+      console.log('🧹 Cleaning up space detail screen state');
+      if (conversationId) {
+        clearSpaceChatState(conversationId);
+      }
+      setConversationId(null);
+      setIsConnecting(false);
+    };
   }, [id]);
 
-  // Fetch space content when currentSpace is available
+  // Sync space content with chat messages for chat spaces (optimized)
   useEffect(() => {
-    if (currentSpace?.id) {
-      handleRefreshContent();
-    }
-  }, [currentSpace?.id, currentSpace?.interactionType]);
-
-  // Sync space content with chat messages for chat spaces
-  useEffect(() => {
-    if (currentSpace?.interactionType === 'chat' && currentSpace.id && spaceContent && Array.isArray(spaceContent)) {
+    if (currentSpace?.interactionType === 'chat' && 
+        currentSpace.id && 
+        spaceContent && 
+        Array.isArray(spaceContent) && 
+        spaceContent.length > 0) {
       console.log('🔄 Syncing space content with chat messages');
-      syncSpaceMessages(currentSpace.id, spaceContent);
+      // Use a timeout to debounce rapid updates
+      const timeoutId = setTimeout(() => {
+        syncSpaceMessages(currentSpace.id, spaceContent);
+      }, 100);
+      
+      return () => clearTimeout(timeoutId);
     }
-  }, [currentSpace?.id, currentSpace?.interactionType, spaceContent]);
+  }, [currentSpace?.id, currentSpace?.interactionType, spaceContent?.length]);
+
+  // Clear chat state when switching spaces to prevent cache confusion
+  useEffect(() => {
+    return () => {
+      if (currentSpace?.id && currentSpace.interactionType === 'chat') {
+        console.log('🧹 Cleaning up chat state for space:', currentSpace.id);
+        clearSpaceChatState(currentSpace.id);
+      }
+    };
+  }, [currentSpace?.id]);
 
   // Setup chat conversation for chat spaces
   useEffect(() => {
@@ -101,19 +144,29 @@ export default function SpaceDetailScreen() {
       setIsConnecting(true);
       console.log('🚀 Initializing space chat for:', currentSpace.name);
       
-      // Connect to WebSocket if not connected
-      if (!connectionStatus.connected) {
-        await connect(user.id);
-      }
+      // Get conversation ID first (this is fast)
+      const convId = `space-${currentSpace.id}`;
+      setConversationId(convId);
       
-      // Join space chat
-      const convId = await joinSpaceChat(
+      // Load cached messages immediately for instant display
+      await loadMessagesFromCache(convId);
+      console.log('✅ Messages loaded from professional cache for conversation:', convId);
+      
+      // Connect to WebSocket in parallel (don't block UI)
+      const connectPromise = connectionStatus.connected 
+        ? Promise.resolve()
+        : connect(user.id);
+      
+      // Join space chat in parallel
+      const joinPromise = joinSpaceChat(
         currentSpace.id, 
         currentSpace.name, 
         currentSpace.communityId
       );
       
-      setConversationId(convId);
+      // Wait for both operations
+      await Promise.all([connectPromise, joinPromise]);
+      
       console.log('✅ Space chat initialized, conversation ID:', convId);
       
     } catch (error) {
@@ -148,6 +201,9 @@ export default function SpaceDetailScreen() {
     try {
       setIsJoining(true);
       await joinSpace(id);
+      
+      // Refresh space data to get updated isJoined status
+      await fetchSpace(id);
       await handleRefreshContent();
     } catch (error) {
       console.error('Failed to join space:', error);
@@ -197,6 +253,121 @@ export default function SpaceDetailScreen() {
   const canJoin = currentSpace && !currentSpace.isJoined && !isOwner;
   const canLeave = currentSpace && currentSpace.isJoined && !isOwner;
   const canViewContent = currentSpace && (currentSpace.isJoined || isOwner || currentSpace.type === 'public');
+
+  // 🚀 Professional Space Join Logic (Telegram/Discord Pattern)
+  const getSpaceJoinActionConfig = () => {
+    if (!currentSpace) return { show: false, text: '', variant: 'solid' as const, color: 'bg-primary-600' };
+    
+    // Owner - no join button needed
+    if (isOwner) {
+      return { show: false, text: '', variant: 'solid' as const, color: 'bg-primary-600' };
+    }
+    
+    // Already joined - show leave option in settings
+    if (currentSpace.isJoined) {
+      return { show: false, text: '', variant: 'solid' as const, color: 'bg-primary-600' };
+    }
+    
+    // Privacy-based join actions
+    switch (currentSpace.type) {
+      case 'public':
+        return { 
+          show: true, 
+          text: '🌍 Join Space', 
+          variant: 'solid' as const, 
+          color: 'bg-emerald-600',
+          description: 'Join this public space and start participating'
+        };
+      case 'private':
+        return { 
+          show: true, 
+          text: '🔒 Request Access', 
+          variant: 'solid' as const, 
+          color: 'bg-amber-600',
+          description: 'Send access request to space moderators'
+        };
+      case 'secret':
+        return { 
+          show: false, 
+          text: '', 
+          variant: 'solid' as const, 
+          color: 'bg-purple-600',
+          description: 'This space is invite-only'
+        };
+      default:
+        return { show: false, text: '', variant: 'solid' as const, color: 'bg-primary-600' };
+    }
+  };
+
+  const spaceJoinActionConfig = getSpaceJoinActionConfig();
+
+  // 🛡️ Professional Role-Based Permissions
+  const canCreatePost = PermissionManager.canCreatePostInSpace(user, currentSpace);
+  const canSendMessage = PermissionManager.canSendMessageInSpace(user, currentSpace);
+  const canManageSpace = PermissionManager.canManageSpace(user, currentSpace);
+  
+  console.log('🔐 Space Permission Status:', {
+    userId: user?.id,
+    spaceId: currentSpace?.id,
+    canCreatePost,
+    canSendMessage,
+    canManageSpace,
+    userRole: user?.role,
+    memberRole: currentSpace?.memberRole,
+    isOwner: currentSpace?.ownerId === user?.id,
+    isJoined: currentSpace?.isJoined,
+    interactionType: currentSpace?.interactionType
+  });
+
+  // 🚀 Fetch space content when currentSpace is available AND user has access
+  useEffect(() => {
+    if (currentSpace?.id && canViewContent) {
+      handleRefreshContent();
+    }
+  }, [currentSpace?.id, currentSpace?.interactionType, canViewContent]);
+
+  // Professional space join handler
+  const handleJoinSpaceAction = async () => {
+    if (!currentSpace || !spaceJoinActionConfig.show) return;
+    
+    try {
+      setIsJoining(true);
+      
+      if (currentSpace.type === 'private') {
+        // TODO: Implement space access request system
+        await joinSpace(currentSpace.id);
+        Alert.alert(
+          'Request Sent',
+          'Your access request has been sent to space moderators. You\'ll be notified when it\'s reviewed.',
+          [{ text: 'OK' }]
+        );
+      } else {
+        await joinSpace(currentSpace.id);
+        
+        // Refresh space data to get updated isJoined status
+        await fetchSpace(currentSpace.id);
+        
+        Alert.alert(
+          'Welcome!',
+          `You've successfully joined ${currentSpace.name}. ${
+            currentSpace.interactionType === 'chat' 
+              ? 'Start chatting with other members!' 
+              : 'Explore posts and discussions!'
+          }`,
+          [{ text: 'Start Exploring' }]
+        );
+      }
+    } catch (error) {
+      console.error('Failed to join space:', error);
+      Alert.alert(
+        'Join Failed',
+        'Unable to join the space right now. Please try again.',
+        [{ text: 'Try Again' }]
+      );
+    } finally {
+      setIsJoining(false);
+    }
+  };
 
   const handleSendMessage = async () => {
     if (!chatMessage.trim() || !conversationId || !currentSpace) return;
@@ -456,9 +627,17 @@ export default function SpaceDetailScreen() {
               
               {!connectionStatus.connected && !isConnecting && (
                 <Box className="bg-red-100 px-4 py-2 border-b border-red-200">
-                  <Text className="text-red-800 text-sm text-center">
-                    ⚠️ Disconnected from chat • Tap to retry
-                  </Text>
+                  <HStack className="items-center justify-between">
+                    <Text className="text-red-800 text-sm flex-1">
+                      ⚠️ Disconnected from chat • Tap to retry
+                    </Text>
+                    <TouchableOpacity 
+                      onPress={() => retryFailedMessages(conversationId || undefined)}
+                      className="bg-red-600 px-3 py-1 rounded-lg ml-2"
+                    >
+                      <Text className="text-white text-xs font-semibold">Retry Failed</Text>
+                    </TouchableOpacity>
+                  </HStack>
                 </Box>
               )}
 
@@ -501,18 +680,31 @@ export default function SpaceDetailScreen() {
                                 }`}>
                                   {message.content}
                                 </Text>
-                                <Text className={`text-xs ${
-                                  message.senderId === user?.id ? 'text-blue-100' : 'text-gray-500'
-                                }`}>
-                                  {message.createdAt ? new Date(message.createdAt).toLocaleTimeString() : 'Now'}
-                                  {message.status && (
-                                    <Text className="ml-1">
-                                      {message.status === 'sending' ? '⏳' : 
-                                       message.status === 'sent' ? '✓' : 
-                                       message.status === 'delivered' ? '✓✓' : '❌'}
-                                    </Text>
+                                <HStack className="items-center justify-between">
+                                  <Text className={`text-xs ${
+                                    message.senderId === user?.id ? 'text-blue-100' : 'text-gray-500'
+                                  }`}>
+                                    {message.createdAt ? new Date(message.createdAt).toLocaleTimeString() : 'Now'}
+                                    {message.status && (
+                                      <Text className="ml-1">
+                                        {message.status === 'sending' ? '⏳' : 
+                                         message.status === 'sent' ? '✓' : 
+                                         message.status === 'delivered' ? '✓✓' : 
+                                         message.status === 'failed' ? '❌' : ''}
+                                      </Text>
+                                    )}
+                                  </Text>
+                                  
+                                  {/* 🚀 Professional Retry Button for Failed Messages */}
+                                  {message.status === 'failed' && message.senderId === user?.id && (
+                                    <TouchableOpacity 
+                                      onPress={() => retryFailedMessages(conversationId || undefined)}
+                                      className="bg-red-500 px-2 py-1 rounded ml-2"
+                                    >
+                                      <Text className="text-white text-xs">Retry</Text>
+                                    </TouchableOpacity>
                                   )}
-                                </Text>
+                                </HStack>
                               </VStack>
                             </Box>
                           ))}
@@ -565,7 +757,7 @@ export default function SpaceDetailScreen() {
                   
                   <TextInput
                     className="flex-1 border border-gray-300 rounded-full px-4 py-2 max-h-20"
-                    placeholder="Type a message..."
+                    placeholder={canSendMessage ? "Type a message..." : "Join space to send messages"}
                     value={chatMessage}
                     onChangeText={(text) => {
                       setChatMessage(text);
@@ -575,21 +767,21 @@ export default function SpaceDetailScreen() {
                     onBlur={handleTypingStop}
                     multiline={true}
                     textAlignVertical="center"
-                    editable={connectionStatus.connected}
+                    editable={connectionStatus.connected && canSendMessage}
                   />
                   <TouchableOpacity 
                     className={`w-10 h-10 rounded-full items-center justify-center ${
-                      chatMessage.trim() && connectionStatus.connected
+                      chatMessage.trim() && connectionStatus.connected && canSendMessage
                         ? 'bg-blue-500' 
                         : 'bg-gray-300'
                     }`}
                     onPress={handleSendMessage}
-                    disabled={!chatMessage.trim() || !connectionStatus.connected}
+                    disabled={!chatMessage.trim() || !connectionStatus.connected || !canSendMessage}
                   >
                     <MaterialIcons 
                       name="send" 
                       size={20} 
-                      color={chatMessage.trim() && connectionStatus.connected ? 'white' : 'gray'} 
+                      color={chatMessage.trim() && connectionStatus.connected && canSendMessage ? 'white' : 'gray'} 
                     />
                   </TouchableOpacity>
                 </HStack>
@@ -613,8 +805,8 @@ export default function SpaceDetailScreen() {
                 </VStack>
               ) : (
                 <Box className="p-4">
-                  {/* Create Post Button for non-chat spaces */}
-                  {canViewContent && (isOwner || currentSpace.isJoined) && (
+                  {/* 🛡️ Role-Based Create Post Button */}
+                  {canViewContent && canCreatePost && (
                     <TouchableOpacity 
                       className="bg-blue-500 rounded-lg p-3 mb-4"
                       onPress={() => setShowCreatePost(true)}
@@ -743,6 +935,29 @@ export default function SpaceDetailScreen() {
           </View>
         )}
       </VStack>
+      
+      {/* 🚀 Professional Bottom Join Button for Spaces (Telegram/Discord Pattern) */}
+      {spaceJoinActionConfig.show && (
+        <Box className="absolute bottom-0 left-0 right-0 bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 px-6 py-4 shadow-2xl">
+          <VStack space="sm">
+            {spaceJoinActionConfig.description && (
+              <Text size="sm" className="text-center text-gray-600 dark:text-gray-400">
+                {spaceJoinActionConfig.description}
+              </Text>
+            )}
+            <Button
+              size="lg"
+              onPress={handleJoinSpaceAction}
+              disabled={isJoining}
+              className={`${spaceJoinActionConfig.color} shadow-lg rounded-xl`}
+            >
+              <ButtonText size="lg" className="text-white font-semibold">
+                {isJoining ? '⏳ Processing...' : spaceJoinActionConfig.text}
+              </ButtonText>
+            </Button>
+          </VStack>
+        </Box>
+      )}
       
       {/* Emoji Picker */}
       <EmojiPicker

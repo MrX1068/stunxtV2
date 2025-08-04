@@ -225,34 +225,6 @@ export default function CreateSpaceScreen() {
             </VStack>
           )}
 
-          {/* Interaction Type */}
-          <VStack space="sm">
-            <Text size="md" className="font-medium text-typography-900">
-              Space Type & Interaction
-            </Text>
-            <VStack space="md">
-              {interactionTypes.map((interaction) => (
-                <Button
-                  key={interaction.id}
-                  variant={formData.interactionType === interaction.id ? "solid" : "outline"}
-                  onPress={() => updateFormData('interactionType', interaction.id)}
-                >
-                  <HStack space="md" className="items-center">
-                    <Text size="lg">{interaction.emoji}</Text>
-                    <VStack className="flex-1">
-                      <ButtonText className={formData.interactionType === interaction.id ? "text-white" : "text-typography-600"}>
-                        {interaction.label}
-                      </ButtonText>
-                      <Text size="sm" className={formData.interactionType === interaction.id ? "text-white opacity-80" : "text-typography-500"}>
-                        {interaction.description}
-                      </Text>
-                    </VStack>
-                  </HStack>
-                </Button>
-              ))}
-            </VStack>
-          </VStack>
-
           {/* Space Type */}
           <VStack space="sm">
             <Text size="md" className="font-medium text-typography-900">

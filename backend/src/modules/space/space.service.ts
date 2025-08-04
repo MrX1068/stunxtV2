@@ -280,7 +280,7 @@ export class SpaceService {
       }
     }
 
-    return this.transformSpaceResponse(space);
+    return await this.transformSpaceResponse(space, userId);
   }
 
   async findByName(communityId: string, name: string, userId?: string): Promise<any> {
@@ -324,7 +324,7 @@ export class SpaceService {
     await this.spaceRepository.save(space);
 
     // Return the updated space with safe transformation
-    return this.findOne(id, updatedBy);
+    return await this.findOne(id, updatedBy);
   }
 
   async delete(id: string, deletedBy: string): Promise<void> {
@@ -398,10 +398,32 @@ export class SpaceService {
 
     const [rawSpaces, total] = await queryBuilder.getManyAndCount();
 
-    // Transform spaces to safely include user data
-    const spaces = rawSpaces.map(space => ({
-      ...space,
-      owner: space.owner ? plainToClass(SafeUserDto, space.owner, { excludeExtraneousValues: true }) : null,
+    // Transform spaces to safely include user data and membership info
+    const spaces = await Promise.all(rawSpaces.map(async (space) => {
+      let userMembership = null;
+      let isJoined = false;
+      let memberRole = null;
+
+      // Get user membership information if userId provided
+      if (userId) {
+        userMembership = await this.spaceMemberRepository.findOne({
+          where: { spaceId: space.id, userId }
+        });
+        
+        if (userMembership && !userMembership.isBanned()) {
+          isJoined = true;
+          memberRole = userMembership.role;
+        }
+      }
+
+      return {
+        ...space,
+        owner: space.owner ? plainToClass(SafeUserDto, space.owner, { excludeExtraneousValues: true }) : null,
+        // User-specific context
+        isJoined,
+        memberRole,
+        userMembership: userMembership ? plainToClass(SpaceMemberResponseDto, userMembership, { excludeExtraneousValues: true }) : null
+      };
     }));
 
     return { spaces, total };
@@ -608,7 +630,23 @@ export class SpaceService {
   }
 
   // Helper method to safely transform space data
-  private transformSpaceResponse(space: Space): any {
+  private async transformSpaceResponse(space: Space, userId?: string): Promise<any> {
+    let userMembership = null;
+    let isJoined = false;
+    let memberRole = null;
+
+    // Get user membership information if userId provided
+    if (userId) {
+      userMembership = await this.spaceMemberRepository.findOne({
+        where: { spaceId: space.id, userId }
+      });
+      
+      if (userMembership && !userMembership.isBanned()) {
+        isJoined = true;
+        memberRole = userMembership.role;
+      }
+    }
+
     const response = {
       ...space,
       owner: space.owner ? plainToClass(SafeUserDto, space.owner, { excludeExtraneousValues: true }) : null,
@@ -619,7 +657,11 @@ export class SpaceService {
       members: space.members ? space.members.map(member => ({
         ...plainToClass(SpaceMemberResponseDto, member, { excludeExtraneousValues: true }),
         user: plainToClass(SafeUserDto, member.user, { excludeExtraneousValues: true })
-      })) : []
+      })) : [],
+      // User-specific context
+      isJoined,
+      memberRole,
+      userMembership: userMembership ? plainToClass(SpaceMemberResponseDto, userMembership, { excludeExtraneousValues: true }) : null
     };
     return response;
   }

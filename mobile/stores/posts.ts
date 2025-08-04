@@ -837,7 +837,28 @@ export const usePostsStore = create<PostsState>()(
             );
             
             if (response.success && response.data) {
-              set({ currentSpace: response.data });
+              const updatedSpace = response.data;
+              
+              // Update the space in all relevant places first
+              set(state => ({
+                // Update spaces array
+                spaces: state.spaces.map(space => 
+                  space.id === id ? { ...space, ...updatedSpace } : space
+                ),
+                // Update community spaces
+                communitySpaces: Object.fromEntries(
+                  Object.entries(state.communitySpaces).map(([communityId, spaces]) => [
+                    communityId,
+                    spaces.map(space => 
+                      space.id === id ? { ...space, ...updatedSpace } : space
+                    )
+                  ])
+                ),
+                // Set currentSpace from updated local data to preserve isJoined status
+                currentSpace: state.spaces.find(s => s.id === id) || 
+                             Object.values(state.communitySpaces).flat().find(s => s.id === id) ||
+                             updatedSpace
+              }));
             } else {
               throw new Error(response.message || 'Failed to fetch space');
             }
@@ -1078,26 +1099,38 @@ export const usePostsStore = create<PostsState>()(
       joinSpace: async (id: string) => {
         try {
           const apiStore = useApiStore.getState();
-          const response = await apiStore.post<ApiResponse>(`/spaces/${id}/join`);
+          const { currentSpace } = get();
+          
+          if (!currentSpace?.communityId) {
+            throw new Error('Community ID not found for space');
+          }
+          
+          const response = await apiStore.post<ApiResponse>(`/communities/${currentSpace.communityId}/spaces/${id}/join`, {});
           
           if (response.success) {
             // Update space in all relevant places
             set(state => ({
+              // Update spaces array
               spaces: state.spaces.map(space => 
                 space.id === id 
-                  ? { ...space, memberCount: (space.memberCount || 0) + 1 }
+                  ? { ...space, memberCount: (space.memberCount || 0) + 1, isJoined: true }
                   : space
               ),
+              // Update community spaces
               communitySpaces: Object.fromEntries(
                 Object.entries(state.communitySpaces).map(([communityId, spaces]) => [
                   communityId,
                   spaces.map(space => 
                     space.id === id 
-                      ? { ...space, memberCount: (space.memberCount || 0) + 1 }
+                      ? { ...space, memberCount: (space.memberCount || 0) + 1, isJoined: true }
                       : space
                   )
                 ])
               ),
+              // Update current space if it's the one being joined
+              currentSpace: state.currentSpace?.id === id 
+                ? { ...state.currentSpace, memberCount: (state.currentSpace.memberCount || 0) + 1, isJoined: true }
+                : state.currentSpace
             }));
           } else {
             throw new Error(response.message || 'Failed to join space');
@@ -1112,26 +1145,45 @@ export const usePostsStore = create<PostsState>()(
       leaveSpace: async (id: string) => {
         try {
           const apiStore = useApiStore.getState();
-          const response = await apiStore.delete<ApiResponse>(`/spaces/${id}/join`);
+          const { currentSpace } = get();
+          const { useAuthStore } = await import('./auth');
+          const { user } = useAuthStore.getState();
+          
+          if (!currentSpace?.communityId) {
+            throw new Error('Community ID not found for space');
+          }
+          
+          if (!user?.id) {
+            throw new Error('User not authenticated');
+          }
+          
+          // Use the member removal endpoint for self-leave
+          const response = await apiStore.delete<ApiResponse>(`/communities/${currentSpace.communityId}/spaces/${id}/members/${user.id}`);
           
           if (response.success) {
             // Update space in all relevant places
             set(state => ({
+              // Update spaces array
               spaces: state.spaces.map(space => 
                 space.id === id 
-                  ? { ...space, memberCount: Math.max(0, (space.memberCount || 0) - 1) }
+                  ? { ...space, memberCount: Math.max(0, (space.memberCount || 0) - 1), isJoined: false }
                   : space
               ),
+              // Update community spaces
               communitySpaces: Object.fromEntries(
                 Object.entries(state.communitySpaces).map(([communityId, spaces]) => [
                   communityId,
                   spaces.map(space => 
                     space.id === id 
-                      ? { ...space, memberCount: Math.max(0, (space.memberCount || 0) - 1) }
+                      ? { ...space, memberCount: Math.max(0, (space.memberCount || 0) - 1), isJoined: false }
                       : space
                   )
                 ])
               ),
+              // Update current space if it's the one being left
+              currentSpace: state.currentSpace?.id === id 
+                ? { ...state.currentSpace, memberCount: Math.max(0, (state.currentSpace.memberCount || 0) - 1), isJoined: false }
+                : state.currentSpace
             }));
           } else {
             throw new Error(response.message || 'Failed to leave space');

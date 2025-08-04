@@ -110,6 +110,10 @@ export interface ChatActions {
   syncSpaceMessages: (spaceId: string, spaceMessages: any[]) => Promise<void>;
   clearSpaceChatState: (spaceId: string) => Promise<void>;
   loadMessagesFromCache: (conversationId: string) => Promise<SocketMessage[]>;
+  
+  // Professional message management
+  retryFailedMessages: (conversationId?: string) => Promise<number>;
+  checkMessageStatus: (conversationId: string, messageId: string) => Promise<string>;
 }
 
 type ChatStore = ChatState & ChatActions;
@@ -172,19 +176,32 @@ export const useChatStore = create<ChatStore>()(
         },
         onMessage: (message: SocketMessage) => {
           console.log('📨 ChatStore: Received new message', message);
+          
+          // 🚀 Professional Message Enhancement - Ensure senderName is properly set
+          const enhancedMessage: SocketMessage = {
+            ...message,
+            senderName: message.senderName || 'Anonymous User'
+          };
+          
+          // If senderName is empty/null but we have senderId, we should fetch user info
+          // For now, we'll use Anonymous User as fallback
+          if (!enhancedMessage.senderName || enhancedMessage.senderName.trim() === '') {
+            enhancedMessage.senderName = 'Anonymous User';
+          }
+          
           set((state) => {
-            const { conversationId } = message;
+            const { conversationId } = enhancedMessage;
             if (!state.messages[conversationId]) {
               state.messages[conversationId] = [];
             }
             // Avoid duplicates
-            if (!state.messages[conversationId].some(m => m.id === message.id)) {
-              state.messages[conversationId].push(message);
+            if (!state.messages[conversationId].some(m => m.id === enhancedMessage.id)) {
+              state.messages[conversationId].push(enhancedMessage);
             }
           });
           
-          // Cache the message immediately for persistence
-          messageCache.addMessageToCache(message.conversationId, message);
+          // Cache the enhanced message immediately for persistence
+          messageCache.addMessageToCache(enhancedMessage.conversationId, enhancedMessage);
         },
         onMessageSent: (data: { optimisticId: string; message: any; success: boolean }) => {
           console.log('✅ ChatStore: Message sent confirmation', data);
@@ -197,8 +214,18 @@ export const useChatStore = create<ChatStore>()(
                 // Update message with server data
                 state.messages[conversationId][msgIndex] = {
                   ...data.message,
-                  status: 'sent',
+                  status: data.success ? 'sent' : 'failed',
+                  timestamp: data.message.timestamp || new Date().toISOString(),
                 };
+                
+                // 🚀 Professional DB Save Status - Check if message was saved to database
+                if (data.success && data.message.savedToDb !== false) {
+                  state.messages[conversationId][msgIndex].status = 'delivered';
+                } else if (data.success && data.message.savedToDb === false) {
+                  // Message sent to recipients but not saved to DB yet
+                  state.messages[conversationId][msgIndex].status = 'sent';
+                  console.warn('⚠️ Message sent but not yet saved to database:', data.optimisticId);
+                }
               }
             }
           });
@@ -206,7 +233,7 @@ export const useChatStore = create<ChatStore>()(
           // Update the message in cache
           messageCache.updateMessageInCache(data.message.conversationId, {
             ...data.message,
-            status: 'sent',
+            status: data.success ? (data.message.savedToDb !== false ? 'delivered' : 'sent') : 'failed',
           });
         },
         onMessageError: (data: { optimisticId: string; error: string; success: boolean }) => {
@@ -222,7 +249,29 @@ export const useChatStore = create<ChatStore>()(
             }
           });
         },
-        // Add other handlers as needed (typing, status, etc.)
+        // 🚀 Professional Typing Indicator Handler
+        onTyping: (data: TypingIndicator, isTyping: boolean) => {
+          console.log('⌨️ ChatStore: Typing indicator update', { data, isTyping });
+          set((state) => {
+            const { conversationId } = data;
+            if (!state.typingUsers[conversationId]) {
+              state.typingUsers[conversationId] = [];
+            }
+            
+            if (isTyping) {
+              // Add user to typing list if not already there
+              if (!state.typingUsers[conversationId].some(u => u.userId === data.userId)) {
+                state.typingUsers[conversationId].push(data);
+              }
+            } else {
+              // Remove user from typing list
+              state.typingUsers[conversationId] = state.typingUsers[conversationId].filter(
+                u => u.userId !== data.userId
+              );
+            }
+          });
+        },
+        // Add other handlers as needed (status, etc.)
       });
 
       try {
@@ -501,12 +550,27 @@ export const useChatStore = create<ChatStore>()(
         return null;
       }
 
+      // 🚀 Professional User Info Retrieval - Get actual user details for optimistic message
+      let currentUserName = 'You'; // Fallback
+      let currentUserId = '';
+      try {
+        const { useAuthStore } = require('./auth');
+        const authState = useAuthStore.getState();
+        const currentUser = authState.user;
+        if (currentUser) {
+          currentUserName = currentUser.username || currentUser.fullName || 'You';
+          currentUserId = currentUser.id;
+        }
+      } catch (error) {
+        console.warn('⚠️ Could not get user info from auth store:', error);
+      }
+
       // Get current user from auth store (this will be set by the UI component)
       const optimisticId = socketService.sendMessage({
         content,
         type,
-        senderId: '', // Will be set by WebSocket with JWT user ID
-        senderName: '', // Will be set by backend
+        senderId: currentUserId, // Use actual user ID
+        senderName: currentUserName, // Use actual user name
         senderAvatar: '',
         conversationId: activeConversationId,
         replyTo: state.replyingTo?.id,
@@ -517,8 +581,8 @@ export const useChatStore = create<ChatStore>()(
         id: optimisticId,
         content,
         type,
-        senderId: '', // Will be populated when backend confirms
-        senderName: 'You',
+        senderId: currentUserId, // Use actual user ID
+        senderName: currentUserName, // Use actual user name
         senderAvatar: '',
         conversationId: activeConversationId,
         timestamp: new Date().toISOString(),
@@ -564,9 +628,21 @@ export const useChatStore = create<ChatStore>()(
       }
 
       // Get current user info for optimistic message from auth store
-      // Note: This is a workaround for Zustand stores - ideally user info should be passed as parameter
-      const currentUserId = socketService.getCurrentUserId(); // We'll add this method to socket service
-      const currentUserName = 'You'; // Fallback name
+      const currentUserId = socketService.getCurrentUserId();
+      
+      // 🚀 Professional User Info Retrieval - Get actual user details
+      let currentUserName = 'You'; // Fallback
+      try {
+        // Access auth store to get current user information (sync import)
+        const { useAuthStore } = require('./auth');
+        const authState = useAuthStore.getState();
+        const currentUser = authState.user;
+        if (currentUser) {
+          currentUserName = currentUser.username || currentUser.fullName || 'You';
+        }
+      } catch (error) {
+        console.warn('⚠️ Could not get user info from auth store:', error);
+      }
 
       console.log('👤 [Chat Store] Current user info for optimistic message:', {
         userId: currentUserId,
@@ -793,8 +869,8 @@ export const useChatStore = create<ChatStore>()(
         status: 'delivered' as const,
       }));
 
-      // Cache messages using the professional cache system
-      await messageCache.setConversationMessages(conversationId, incomingChatMessages);
+      // Use smart merge to prevent overwriting newer messages
+      await messageCache.mergeConversationMessages(conversationId, incomingChatMessages);
 
       // Update in-memory state by loading from cache
       // This ensures UI consistency and prevents race conditions
@@ -802,7 +878,7 @@ export const useChatStore = create<ChatStore>()(
       
       set((state) => {
         state.messages[conversationId] = cachedMessages;
-        console.log('✅ [Professional Cache] Messages synced and cached:', {
+        console.log('✅ [Professional Cache] Messages synced and cached using smart merge:', {
           finalMessageCount: cachedMessages.length,
           conversationId
         });
@@ -859,6 +935,66 @@ export const useChatStore = create<ChatStore>()(
         console.error('❌ [Professional Cache] Error loading messages from cache:', error);
         return [];
       }
+    },
+
+    // 🚀 Professional Message Retry System - Handle DB save delays and failures
+    retryFailedMessages: async (conversationId?: string) => {
+      const state = get();
+      console.log('🔄 [Professional Retry] Starting failed message retry process');
+      
+      // Get conversations to check for failed messages
+      const conversationsToCheck = conversationId 
+        ? [conversationId] 
+        : Object.keys(state.messages);
+      
+      let retriedCount = 0;
+      
+      for (const convoId of conversationsToCheck) {
+        const messages = state.messages[convoId] || [];
+        const failedMessages = messages.filter(msg => msg.status === 'failed' || msg.status === 'sending');
+        
+        for (const failedMessage of failedMessages) {
+          try {
+            console.log('🔄 [Professional Retry] Retrying message:', failedMessage.id);
+            
+            // Resend the message
+            const newOptimisticId = socketService.sendMessage({
+              content: failedMessage.content,
+              type: failedMessage.type,
+              senderId: failedMessage.senderId,
+              senderName: failedMessage.senderName,
+              senderAvatar: failedMessage.senderAvatar,
+              conversationId: convoId,
+              replyTo: failedMessage.replyTo,
+            });
+            
+            // Update the message status to sending
+            set((state) => {
+              const msgIndex = state.messages[convoId].findIndex(m => m.id === failedMessage.id);
+              if (msgIndex !== -1) {
+                state.messages[convoId][msgIndex].status = 'sending';
+                state.messages[convoId][msgIndex].id = newOptimisticId; // Update with new optimistic ID
+              }
+            });
+            
+            retriedCount++;
+            
+          } catch (error) {
+            console.error('❌ [Professional Retry] Failed to retry message:', error);
+          }
+        }
+      }
+      
+      console.log(`✅ [Professional Retry] Completed retry process. Retried ${retriedCount} messages.`);
+      return retriedCount;
+    },
+
+    // Professional message status checker for DB save delays
+    checkMessageStatus: async (conversationId: string, messageId: string) => {
+      console.log('🔍 [Professional Status Check] Checking message status:', messageId);
+      // This could make an API call to check if message was saved to DB
+      // For now, we'll rely on WebSocket confirmations
+      return 'unknown';
     },
   }))
 );

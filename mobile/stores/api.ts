@@ -260,6 +260,9 @@ export const useApiStore = create<ApiState>()(
               });
               
               // Retry the original request with new token
+              // 🚀 Add small delay to ensure token synchronization
+              await new Promise(resolve => setTimeout(resolve, 100));
+              
               const newToken = useAuthStore.getState().token;
               console.log('🔄 API: Retrying original request with new token:', {
                 endpoint,

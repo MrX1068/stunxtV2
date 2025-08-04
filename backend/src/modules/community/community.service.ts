@@ -177,7 +177,7 @@ export class CommunityService {
       }
     }
 
-    return this.transformCommunityResponse(community);
+    return await this.transformCommunityResponse(community, userId);
   }
 
   async findBySlug(slug: string, userId?: string): Promise<any> {
@@ -241,7 +241,7 @@ export class CommunityService {
     }
 
     // Return updated community with safe transformation
-    return this.findOne(id, userId);
+    return await this.findOne(id, userId);
   }
 
   async delete(id: string, userId: string): Promise<void> {
@@ -443,14 +443,40 @@ export class CommunityService {
   }
 
   // Helper method to safely transform community data
-  private transformCommunityResponse(community: Community): any {
+  private async transformCommunityResponse(community: Community, userId?: string): Promise<any> {
+    let userMembership = null;
+    let isJoined = false;
+    let memberRole = null;
+    let isOwner = false;
+
+    // Get user membership information if userId provided
+    if (userId) {
+      // Check if user is the owner
+      isOwner = community.ownerId === userId;
+      
+      // Get membership info
+      userMembership = await this.memberRepository.findOne({
+        where: { communityId: community.id, userId }
+      });
+      
+      if (userMembership && userMembership.isActive()) {
+        isJoined = true;
+        memberRole = userMembership.role;
+      }
+    }
+
     const response = {
       ...community,
       owner: community.owner ? plainToClass(SafeUserDto, community.owner, { excludeExtraneousValues: true }) : null,
       members: community.members ? community.members.map(member => ({
         ...plainToClass(CommunityMemberResponseDto, member, { excludeExtraneousValues: true }),
         user: plainToClass(SafeUserDto, member.user, { excludeExtraneousValues: true })
-      })) : []
+      })) : [],
+      // User-specific context
+      isJoined,
+      isOwner,
+      memberRole,
+      userMembership: userMembership ? plainToClass(CommunityMemberResponseDto, userMembership, { excludeExtraneousValues: true }) : null
     };
     return response;
   }
