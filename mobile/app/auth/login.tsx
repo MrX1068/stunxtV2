@@ -104,7 +104,7 @@ export default function LoginScreen() {
       }
     } catch (err) {
       // Error is handled by the store and displayed via the error state
-      console.log("Login error:", err);
+
     }
   };
  

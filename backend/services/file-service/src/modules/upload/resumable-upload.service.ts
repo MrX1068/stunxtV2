@@ -28,7 +28,7 @@ export class ResumableUploadService {
    */
   async initializeUpload(dto: InitResumableUploadDto, userId: string): Promise<UploadSession> {
     try {
-      this.logger.log(`Initializing resumable upload for user: ${userId}`);
+     
 
       // Calculate total chunks
       const totalChunks = Math.ceil(dto.size / dto.chunkSize);
@@ -52,11 +52,11 @@ export class ResumableUploadService {
       // Create temporary file
       await this.createTempFile(savedSession.tempFilePath, dto.size);
 
-      this.logger.log(`Upload session created: ${savedSession.id}`);
+    
       return savedSession;
 
     } catch (error) {
-      this.logger.error('Failed to initialize resumable upload:', error);
+     
       throw error;
     }
   }
@@ -80,7 +80,7 @@ export class ResumableUploadService {
 
       // Check if chunk already uploaded
       if (session.uploadedChunksList.includes(chunkIndex)) {
-        this.logger.warn(`Chunk ${chunkIndex} already uploaded for session: ${sessionId}`);
+     
         return session;
       }
 
@@ -106,16 +106,16 @@ export class ResumableUploadService {
       // Check if upload is complete
       if (session.uploadedChunks === session.totalChunks) {
         session.status = UploadSessionStatus.COMPLETED;
-        this.logger.log(`Upload completed for session: ${sessionId}`);
+      
       }
 
       const updatedSession = await this.sessionRepository.save(session);
 
-      this.logger.log(`Chunk ${chunkIndex} uploaded for session: ${sessionId} (${session.progressPercentage}%)`);
+     
       return updatedSession;
 
     } catch (error) {
-      this.logger.error(`Failed to upload chunk ${chunkIndex} for session ${sessionId}:`, error);
+      
       
       // Mark session as failed
       session.status = UploadSessionStatus.FAILED;
@@ -161,11 +161,11 @@ export class ResumableUploadService {
         );
       }
 
-      this.logger.log(`Upload completed and verified for session: ${sessionId}`);
+     
       return { buffer, session };
 
     } catch (error) {
-      this.logger.error(`Failed to complete upload for session ${sessionId}:`, error);
+   
       throw error;
     }
   }
@@ -184,10 +184,8 @@ export class ResumableUploadService {
       // Clean up temporary file
       await this.cleanupTempFile(session.tempFilePath);
 
-      this.logger.log(`Upload session cancelled: ${sessionId}`);
 
     } catch (error) {
-      this.logger.error(`Failed to cancel upload session ${sessionId}:`, error);
       throw error;
     }
   }
@@ -210,10 +208,10 @@ export class ResumableUploadService {
         await this.cleanupTempFile(session.tempFilePath);
       }
 
-      this.logger.log(`Cleaned up ${expiredSessions.length} expired upload sessions`);
+    
 
     } catch (error) {
-      this.logger.error('Failed to cleanup expired sessions:', error);
+     
     }
   }
 
@@ -246,7 +244,7 @@ export class ResumableUploadService {
   private ensureTempDirectoryExists(): void {
     if (!fs.existsSync(this.tempDir)) {
       fs.mkdirSync(this.tempDir, { recursive: true });
-      this.logger.log(`Created temp directory: ${this.tempDir}`);
+
     }
   }
 
@@ -299,10 +297,10 @@ export class ResumableUploadService {
     try {
       if (fs.existsSync(filePath)) {
         await fs.promises.unlink(filePath);
-        this.logger.log(`Cleaned up temp file: ${filePath}`);
+
       }
     } catch (error) {
-      this.logger.warn(`Failed to cleanup temp file ${filePath}:`, error);
+
     }
   }
 }

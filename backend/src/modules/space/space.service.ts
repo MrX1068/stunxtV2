@@ -707,9 +707,7 @@ export class SpaceService {
       await this.create(announcementsSpace, communityId, createdBy);
       await this.create(generalSpace, communityId, createdBy);
 
-      console.log(`✅ Default spaces created for community ${communityId}`);
     } catch (error) {
-      console.error(`❌ Failed to create default spaces for community ${communityId}:`, error);
       // Don't throw error to prevent community creation from failing
     }
   }
@@ -730,36 +728,33 @@ export class SpaceService {
       after?: string;
     } = {}
   ): Promise<any> {
-    console.log('🔵 [SpaceService] getSpaceContent called');
-    console.log('🔵 [SpaceService] Params:', { spaceId, userId, options });
+  
     
     try {
       const space = await this.findOne(spaceId);
-      console.log('🔵 [SpaceService] Found space:', { id: space?.id, name: space?.name, interactionType: space?.interactionType });
+     
       
       if (!space) {
-        console.error('❌ [SpaceService] Space not found for ID:', spaceId);
+        
         throw new NotFoundException('Space not found');
       }
 
       // Determine content type based on space interaction type or override
       const contentType = options.contentType || 
         (space.interactionType === SpaceInteractionType.CHAT ? 'messages' : 'posts');
-      console.log('🔵 [SpaceService] Determined content type:', contentType);
+    
 
       if (contentType === 'messages') {
-        console.log('🔵 [SpaceService] Fetching messages for chat space');
+        
         const result = await this.getSpaceMessages(spaceId, userId, options);
-        console.log('✅ [SpaceService] Messages retrieved:', { count: result?.messages?.length || 0 });
+       
         return result;
       } else {
-        console.log('🔵 [SpaceService] Fetching posts for post space');
+        
         const result = await this.getSpacePosts(spaceId, userId, options);
-        console.log('✅ [SpaceService] Posts retrieved:', { count: result?.posts?.length || 0 });
         return result;
       }
     } catch (error) {
-      console.error('❌ [SpaceService] Error in getSpaceContent:', error);
       throw error;
     }
   }
@@ -772,31 +767,24 @@ export class SpaceService {
     userId: string,
     contentData: any
   ): Promise<any> {
-    console.log('🟡 [SpaceService] createSpaceContent called');
-    console.log('🟡 [SpaceService] Params:', { spaceId, userId, contentData });
     
     try {
       const space = await this.findOne(spaceId);
-      console.log('🟡 [SpaceService] Found space:', { id: space?.id, name: space?.name, interactionType: space?.interactionType });
+    
       
       if (!space) {
-        console.error('❌ [SpaceService] Space not found for ID:', spaceId);
+        
         throw new NotFoundException('Space not found');
       }
 
       if (space.interactionType === SpaceInteractionType.CHAT) {
-        console.log('🟡 [SpaceService] Creating message for chat space');
         const result = await this.sendSpaceMessage(spaceId, userId, contentData);
-        console.log('✅ [SpaceService] Message created successfully');
         return result;
       } else {
-        console.log('🟡 [SpaceService] Creating post for post space');
         const result = await this.createSpacePost(spaceId, userId, contentData);
-        console.log('✅ [SpaceService] Post created successfully');
         return result;
       }
     } catch (error) {
-      console.error('❌ [SpaceService] Error in createSpaceContent:', error);
       throw error;
     }
   }
@@ -813,20 +801,17 @@ export class SpaceService {
       after?: string;
     } = {}
   ): Promise<any> {
-    console.log('💬 [SpaceService] getSpaceMessages called');
-    console.log('💬 [SpaceService] Params:', { spaceId, userId, options });
     
     try {
       const space = await this.findOne(spaceId);
-      console.log('💬 [SpaceService] Found space:', { id: space?.id, name: space?.name, interactionType: space?.interactionType });
       
       if (!space) {
-        console.error('❌ [SpaceService] Space not found for ID:', spaceId);
+      
         throw new NotFoundException('Space not found');
       }
 
       if (space.interactionType !== SpaceInteractionType.CHAT) {
-        console.error('❌ [SpaceService] Space is not a chat space:', space.interactionType);
+      
         throw new BadRequestException('This space does not support messages');
       }
 
@@ -835,10 +820,10 @@ export class SpaceService {
         where: { spaceId },
         relations: ['space'],
       });
-      console.log('💬 [SpaceService] Found conversation:', { id: conversation?.id, exists: !!conversation });
+     
 
       if (!conversation) {
-        console.log('💬 [SpaceService] Auto-creating conversation for chat space');
+       
         // Auto-create conversation for chat spaces if it doesn't exist
         conversation = await this.conversationService.createConversation(
           userId,
@@ -847,7 +832,7 @@ export class SpaceService {
           space.name,
         `Chat for space: ${space.name}`
       );
-      console.log('✅ [SpaceService] Conversation created:', conversation.id);
+     
       
       // Link conversation to space (update conversation with spaceId)
       await this.conversationRepository.update(conversation.id, { spaceId });
@@ -857,17 +842,13 @@ export class SpaceService {
         where: { id: conversation.id },
         relations: ['space'],
       });
-      console.log('💬 [SpaceService] Conversation linked to space');
     }
 
-    console.log('💬 [SpaceService] Getting messages from space conversation...');
+   
     
     // Use space conversation format for message service to handle it properly
     const spaceConversationId = `space-${conversation.id}`;
-    console.log('🔧 [SpaceService] Using space conversation format:', {
-      originalId: conversation.id,
-      spaceConversationId
-    });
+   
     
     // Get messages via message service using space conversation format
     const result = await this.messageService.getMessages(
@@ -877,10 +858,8 @@ export class SpaceService {
       options.before,
       options.after
     );
-    console.log('✅ [SpaceService] Messages retrieved:', { count: result?.messages?.length || 0 });
     return result;
     } catch (error) {
-      console.error('❌ [SpaceService] Error in getSpaceMessages:', error);
       throw error;
     }
   }
@@ -893,15 +872,13 @@ export class SpaceService {
     userId: string,
     spaceName?: string
   ): Promise<string> {
-    console.log('🟡 [SpaceService] getOrCreateSpaceConversation called');
-    console.log('🟡 [SpaceService] Params:', { spaceId, userId, spaceName });
+  
     
     try {
       const space = await this.findOne(spaceId);
-      console.log('🟡 [SpaceService] Found space:', { id: space?.id, name: space?.name, interactionType: space?.interactionType });
+    
       
       if (!space) {
-        console.error('❌ [SpaceService] Space not found for ID:', spaceId);
         throw new NotFoundException('Space not found');
       }
 
@@ -911,12 +888,11 @@ export class SpaceService {
       });
 
       if (conversation) {
-        console.log('✅ [SpaceService] Found existing conversation:', conversation.id);
+       
         return conversation.id;
       }
 
       // Create new conversation for the space
-      console.log('🟡 [SpaceService] Creating new space conversation');
       conversation = await this.conversationService.createConversation(
         userId,
         ConversationType.SPACE,
@@ -927,11 +903,11 @@ export class SpaceService {
       
       // Link conversation to space
       await this.conversationRepository.update(conversation.id, { spaceId });
-      console.log('✅ [SpaceService] Created and linked conversation:', conversation.id);
+     
 
       return conversation.id;
     } catch (error) {
-      console.error('❌ [SpaceService] Error in getOrCreateSpaceConversation:', error);
+      
       throw error;
     }
   }
@@ -944,9 +920,7 @@ export class SpaceService {
     userId: string,
     messageData: any
   ): Promise<any> {
-    console.log('🟡 [SpaceService] sendSpaceMessage called');
-    console.log('🟡 [SpaceService] Params:', { spaceId, userId, messageType: messageData.type });
-    
+   
     const space = await this.findOne(spaceId);
     if (!space) {
       throw new NotFoundException('Space not found');
@@ -956,14 +930,13 @@ export class SpaceService {
     const conversationId = await this.getOrCreateSpaceConversation(spaceId, userId, space.name);
 
     // Send message
-    console.log('🟡 [SpaceService] Sending message to conversation:', conversationId);
+   
     const result = await this.messageService.sendMessage(userId, {
       conversationId,
       content: messageData.content,
       type: messageData.type || 'text'
     });
 
-    console.log('✅ [SpaceService] Space message sent successfully');
     return result;
   }
 
@@ -979,15 +952,12 @@ export class SpaceService {
       sortBy?: string;
     } = {}
   ): Promise<any> {
-    console.log('📝 [SpaceService] getSpacePosts called');
-    console.log('📝 [SpaceService] Params:', { spaceId, userId, options });
-    
+  
     try {
       const space = await this.findOne(spaceId);
-      console.log('📝 [SpaceService] Found space:', { id: space?.id, name: space?.name, interactionType: space?.interactionType });
       
       if (!space) {
-        console.error('❌ [SpaceService] Space not found for ID:', spaceId);
+      
         throw new NotFoundException('Space not found');
       }
 
@@ -998,21 +968,21 @@ export class SpaceService {
       ];
 
       if (!supportedTypes.includes(space.interactionType)) {
-        console.error('❌ [SpaceService] Space does not support posts:', space.interactionType);
+     
         throw new BadRequestException('This space does not support posts');
       }
 
-      console.log('📝 [SpaceService] Calling PostService.getSpacePosts');
+    
       // Use existing post service
       const result = await this.postService.getSpacePosts(spaceId, userId, {
         limit: options.limit || 20,
         offset: options.offset || 0,
         sortBy: options.sortBy || 'createdAt',
       });
-      console.log('✅ [SpaceService] Posts retrieved via PostService:', { count: result?.posts?.length || 0 });
+     
       return result;
     } catch (error) {
-      console.error('❌ [SpaceService] Error in getSpacePosts:', error);
+     
       throw error;
     }
   }
@@ -1046,7 +1016,7 @@ export class SpaceService {
       postType = postData.type;
     }
 
-    console.log('📝 [SpaceService] Creating post with type:', postType);
+   
 
     // Create post via post service
     return this.postService.createPost(userId, {

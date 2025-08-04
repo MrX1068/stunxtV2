@@ -149,7 +149,7 @@ export const useChatStore = create<ChatStore>()(
       // Setup socket event handlers immediately for faster UI updates
       socketService.setEventHandlers({
         onConnectSuccess: (data) => {
-          console.log('✅ ChatStore: Connection success event received', data);
+        
           set((state) => {
             state.connectionStatus.connected = true;
             state.connectionStatus.connecting = false;
@@ -158,7 +158,6 @@ export const useChatStore = create<ChatStore>()(
           });
         },
         onConnectError: (error) => {
-          console.error('❌ ChatStore: Connection error event received', error);
           set((state) => {
             state.connectionStatus.connected = false;
             state.connectionStatus.connecting = false;
@@ -167,7 +166,6 @@ export const useChatStore = create<ChatStore>()(
           });
         },
         onDisconnect: (reason) => {
-          console.log('🔌 ChatStore: Disconnected', reason);
           set((state) => {
             state.connectionStatus.connected = false;
             state.connectionStatus.connecting = false;
@@ -175,7 +173,7 @@ export const useChatStore = create<ChatStore>()(
           });
         },
         onMessage: (message: SocketMessage) => {
-          console.log('📨 ChatStore: Received new message', message);
+        
           
           // 🚀 Professional Message Enhancement - Ensure senderName is properly set
           const enhancedMessage: SocketMessage = {
@@ -204,7 +202,7 @@ export const useChatStore = create<ChatStore>()(
           messageCache.addMessageToCache(enhancedMessage.conversationId, enhancedMessage);
         },
         onMessageSent: (data: { optimisticId: string; message: any; success: boolean }) => {
-          console.log('✅ ChatStore: Message sent confirmation', data);
+        
           set((state) => {
             const { conversationId } = data.message;
             const convoMessages = state.messages[conversationId];
@@ -224,7 +222,6 @@ export const useChatStore = create<ChatStore>()(
                 } else if (data.success && data.message.savedToDb === false) {
                   // Message sent to recipients but not saved to DB yet
                   state.messages[conversationId][msgIndex].status = 'sent';
-                  console.warn('⚠️ Message sent but not yet saved to database:', data.optimisticId);
                 }
               }
             }
@@ -237,7 +234,7 @@ export const useChatStore = create<ChatStore>()(
           });
         },
         onMessageError: (data: { optimisticId: string; error: string; success: boolean }) => {
-          console.error('❌ ChatStore: Message send error', data);
+       
           set((state) => {
             // Find conversation and message to update status
             for (const convoId in state.messages) {
@@ -251,7 +248,6 @@ export const useChatStore = create<ChatStore>()(
         },
         // 🚀 Professional Typing Indicator Handler
         onTyping: (data: TypingIndicator, isTyping: boolean) => {
-          console.log('⌨️ ChatStore: Typing indicator update', { data, isTyping });
           set((state) => {
             const { conversationId } = data;
             if (!state.typingUsers[conversationId]) {
@@ -276,9 +272,9 @@ export const useChatStore = create<ChatStore>()(
 
       try {
         await socketService.connect(userId);
-        console.log('SocketService.connect() promise resolved');
+       
       } catch (error) {
-        console.error('Error during socket connection in ChatStore:', error);
+       
         set((state) => {
           state.isConnecting = false;
           state.error = error instanceof Error ? error.message : 'Connection failed';
@@ -310,14 +306,11 @@ export const useChatStore = create<ChatStore>()(
     fetchConversations: async () => {
       try {
         const api = useApiStore.getState();
-        console.log('📞 Fetching conversations from: /conversations');
         const response = await api.get('/conversations');
-        console.log('✅ Conversations fetched successfully:', response.data);
         set((state) => {
           state.conversations = response.data.data?.conversations || [];
         });
       } catch (error) {
-        console.error('❌ Failed to fetch conversations:', error);
         set((state) => {
           state.error = error instanceof Error ? error.message : 'Failed to fetch conversations';
         });
@@ -356,14 +349,13 @@ export const useChatStore = create<ChatStore>()(
         }
         
         const api = useApiStore.getState();
-        console.log('🚀 Creating space conversation:', { spaceId, spaceName, communityId });
         
         // Use the space-specific endpoint for space chat
         const response = await api.post(`/communities/${communityId}/spaces/${spaceId}/chat/conversation`, {
           spaceName,
         });
         
-        console.log('✅ Space conversation created:', response.data);
+        
         const conversationId = response.data.conversationId || response.data.data?.conversationId;
         
         // Store space to conversation mapping
@@ -373,7 +365,7 @@ export const useChatStore = create<ChatStore>()(
         
         return conversationId;
       } catch (error) {
-        console.error('❌ Failed to create space conversation:', error);
+      
         set((state) => {
           state.error = error instanceof Error ? error.message : 'Failed to create conversation';
         });
@@ -384,13 +376,12 @@ export const useChatStore = create<ChatStore>()(
     createDirectConversation: async (participantId: string): Promise<string> => {
       try {
         const api = useApiStore.getState();
-        console.log('🚀 Creating direct conversation with:', participantId);
         const response = await api.post('/conversations', {
           type: 'DIRECT',
           participantIds: [participantId],
         });
         
-        console.log('✅ Direct conversation created:', response.data);
+       
         const conversation = response.data.conversation;
         set((state) => {
           state.conversations.unshift(conversation);
@@ -398,7 +389,6 @@ export const useChatStore = create<ChatStore>()(
         
         return conversation.id;
       } catch (error) {
-        console.error('❌ Failed to create direct conversation:', error);
         set((state) => {
           state.error = error instanceof Error ? error.message : 'Failed to create direct conversation';
         });
@@ -409,14 +399,13 @@ export const useChatStore = create<ChatStore>()(
     createGroupConversation: async (participantIds: string[], name: string): Promise<string> => {
       try {
         const api = useApiStore.getState();
-        console.log('🚀 Creating group conversation:', { participantIds, name });
         const response = await api.post('/conversations', {
           type: 'GROUP',
           participantIds,
           name,
         });
         
-        console.log('✅ Group conversation created:', response.data);
+
         const conversation = response.data.conversation;
         set((state) => {
           state.conversations.unshift(conversation);
@@ -424,7 +413,6 @@ export const useChatStore = create<ChatStore>()(
         
         return conversation.id;
       } catch (error) {
-        console.error('❌ Failed to create group conversation:', error);
         set((state) => {
           state.error = error instanceof Error ? error.message : 'Failed to create group conversation';
         });
@@ -438,7 +426,6 @@ export const useChatStore = create<ChatStore>()(
     },
 
     joinSpaceChat: async (spaceId: string, spaceName: string, communityId?: string): Promise<string> => {
-      console.log('🚀 Joining space chat:', { spaceId, spaceName, communityId });
       
       // Use a simple, deterministic conversation ID for space chats
       // This avoids UUID validation issues in the backend
@@ -477,11 +464,9 @@ export const useChatStore = create<ChatStore>()(
       
       // Join the WebSocket room using the conversation ID
       if (get().connectionStatus.connected) {
-        console.log('🔌 Joining WebSocket room:', conversationId);
         socketService.joinConversation(conversationId);
       }
       
-      console.log('✅ Space chat joined with conversation ID:', conversationId);
       return conversationId;
     },
 
@@ -495,7 +480,6 @@ export const useChatStore = create<ChatStore>()(
         // Check if this is a space conversation
         if (conversationId.startsWith('space-')) {
           const spaceId = conversationId.replace('space-', '');
-          console.log('📱 Fetching space messages for space:', spaceId);
           
           // For space chats, we don't need to fetch separately as the space content
           // is already being fetched by the space screen. Just mark as loaded.
@@ -562,7 +546,6 @@ export const useChatStore = create<ChatStore>()(
           currentUserId = currentUser.id;
         }
       } catch (error) {
-        console.warn('⚠️ Could not get user info from auth store:', error);
       }
 
       // Get current user from auth store (this will be set by the UI component)
@@ -615,15 +598,9 @@ export const useChatStore = create<ChatStore>()(
     },
 
     sendMessageToConversation: (conversationId: string, content: string, type = 'text' as const) => {
-      console.log('📤 [Chat Store] sendMessageToConversation called:', {
-        conversationId,
-        content: content.substring(0, 100),
-        type,
-        timestamp: new Date().toISOString()
-      });
+ 
 
       if (!conversationId || !content.trim()) {
-        console.error('❌ [Chat Store] Invalid parameters for sendMessageToConversation');
         return null;
       }
 
@@ -641,13 +618,9 @@ export const useChatStore = create<ChatStore>()(
           currentUserName = currentUser.username || currentUser.fullName || 'You';
         }
       } catch (error) {
-        console.warn('⚠️ Could not get user info from auth store:', error);
       }
 
-      console.log('👤 [Chat Store] Current user info for optimistic message:', {
-        userId: currentUserId,
-        userName: currentUserName
-      });
+     
 
       // Send message directly to the specified conversation
       const optimisticId = socketService.sendMessage({
@@ -659,8 +632,6 @@ export const useChatStore = create<ChatStore>()(
         conversationId,
         replyTo: undefined, // No reply support for direct conversation messages
       });
-
-      console.log('🚀 [Chat Store] Message sent to socket service, optimisticId:', optimisticId);
 
       // Create optimistic message for immediate UI update with correct sender info
       const optimisticMessage: SocketMessage = {
@@ -676,12 +647,7 @@ export const useChatStore = create<ChatStore>()(
         status: 'sending',
       };
 
-      console.log('⚡ [Chat Store] Created optimistic message with correct sender:', {
-        messageId: optimisticMessage.id,
-        senderId: optimisticMessage.senderId,
-        senderName: optimisticMessage.senderName,
-        content: optimisticMessage.content.substring(0, 50)
-      });
+    
 
       // Add optimistic message to state
       set((state) => {
@@ -700,7 +666,6 @@ export const useChatStore = create<ChatStore>()(
       // Cache the optimistic message immediately for persistence
       messageCache.addMessageToCache(conversationId, optimisticMessage);
 
-      console.log('✅ [Chat Store] Optimistic message added to state and cached');
       return optimisticId;
     },
 
@@ -836,8 +801,6 @@ export const useChatStore = create<ChatStore>()(
       // Get socket service connection status
       const socketStatus = socketService.getConnectionStatus();
       const currentStatus = get().getConnectionStatus();
-      console.log('[Chat Store] Refreshing connection status - Socket status:', socketStatus, 'Current status:', currentStatus);
-      
       set((state) => {
         state.connectionStatus = {
           connected: socketStatus.connected,
@@ -850,11 +813,7 @@ export const useChatStore = create<ChatStore>()(
     // Space integration helpers
     syncSpaceMessages: async (spaceId: string, spaceMessages: any[]) => {
       const conversationId = `space-${spaceId}`;
-      console.log('🔄 [Professional Cache] Syncing space messages:', {
-        spaceId,
-        conversationId,
-        incomingMessageCount: spaceMessages.length,
-      });
+      
 
       // Convert incoming space messages to the standard chat message format
       const incomingChatMessages: SocketMessage[] = spaceMessages.map((msg, index) => ({
@@ -878,16 +837,11 @@ export const useChatStore = create<ChatStore>()(
       
       set((state) => {
         state.messages[conversationId] = cachedMessages;
-        console.log('✅ [Professional Cache] Messages synced and cached using smart merge:', {
-          finalMessageCount: cachedMessages.length,
-          conversationId
-        });
       });
     },
 
     clearSpaceChatState: async (spaceId: string) => {
       const conversationId = `space-${spaceId}`;
-      console.log('🧹 [Professional Cache] Clearing chat state for space:', { spaceId, conversationId });
       
       // Clear from secure cache
       await messageCache.clearConversationCache(conversationId);
@@ -911,13 +865,11 @@ export const useChatStore = create<ChatStore>()(
         }
       });
       
-      console.log('✅ [Professional Cache] Space chat state cleared successfully');
+     
     },
 
     // Load messages from cache when entering a conversation
     loadMessagesFromCache: async (conversationId: string) => {
-      console.log('📱 [Professional Cache] Loading messages from cache:', conversationId);
-      
       try {
         const cachedMessages = await messageCache.getConversationMessages(conversationId);
         
@@ -925,14 +877,11 @@ export const useChatStore = create<ChatStore>()(
           state.messages[conversationId] = cachedMessages;
         });
         
-        console.log('✅ [Professional Cache] Messages loaded from cache:', {
-          conversationId,
-          messageCount: cachedMessages.length
-        });
+   
         
         return cachedMessages;
       } catch (error) {
-        console.error('❌ [Professional Cache] Error loading messages from cache:', error);
+       
         return [];
       }
     },
@@ -940,7 +889,6 @@ export const useChatStore = create<ChatStore>()(
     // 🚀 Professional Message Retry System - Handle DB save delays and failures
     retryFailedMessages: async (conversationId?: string) => {
       const state = get();
-      console.log('🔄 [Professional Retry] Starting failed message retry process');
       
       // Get conversations to check for failed messages
       const conversationsToCheck = conversationId 
@@ -955,7 +903,6 @@ export const useChatStore = create<ChatStore>()(
         
         for (const failedMessage of failedMessages) {
           try {
-            console.log('🔄 [Professional Retry] Retrying message:', failedMessage.id);
             
             // Resend the message
             const newOptimisticId = socketService.sendMessage({
@@ -980,18 +927,16 @@ export const useChatStore = create<ChatStore>()(
             retriedCount++;
             
           } catch (error) {
-            console.error('❌ [Professional Retry] Failed to retry message:', error);
+        
           }
         }
       }
       
-      console.log(`✅ [Professional Retry] Completed retry process. Retried ${retriedCount} messages.`);
       return retriedCount;
     },
 
     // Professional message status checker for DB save delays
     checkMessageStatus: async (conversationId: string, messageId: string) => {
-      console.log('🔍 [Professional Status Check] Checking message status:', messageId);
       // This could make an API call to check if message was saved to DB
       // For now, we'll rely on WebSocket confirmations
       return 'unknown';

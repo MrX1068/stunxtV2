@@ -67,7 +67,7 @@ export class OtpService {
     const expiresAt = new Date(Date.now() + config.expirationMinutes * 60 * 1000);
     const hashedCode = this.hashOtp(code);
 
-    this.logger.debug(`Generated OTP: ${code} (expires: ${expiresAt})`);
+
 
     return {
       code,
@@ -82,7 +82,7 @@ export class OtpService {
   verifyOtp(inputCode: string, hashedCode: string, expiresAt: Date): boolean {
     // Check if OTP has expired
     if (new Date() > expiresAt) {
-      this.logger.warn('OTP verification failed: expired');
+  
       return false;
     }
 
@@ -91,9 +91,9 @@ export class OtpService {
     const isValid = inputHashedCode === hashedCode;
 
     if (isValid) {
-      this.logger.debug('OTP verification successful');
+   
     } else {
-      this.logger.warn('OTP verification failed: invalid code');
+
     }
 
     return isValid;

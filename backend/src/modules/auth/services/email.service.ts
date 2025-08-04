@@ -33,16 +33,10 @@ export class EmailService {
     const emailConfig = this.configService.get('email');
     
     // Log the email config for debugging (without sensitive data)
-    this.logger.debug('Email config check:', {
-      host: emailConfig?.host,
-      port: emailConfig?.port,
-      user: emailConfig?.user ? '***@***' : 'missing',
-      hasPassword: !!emailConfig?.password
-    });
+
     
     // If no email config, use development mode (logs only)
     if (!emailConfig?.host || !emailConfig?.user || !emailConfig?.password) {
-      this.logger.warn('⚠️  No email configuration found. Running in development mode (logs only).');
       return;
     }
 
@@ -64,15 +58,14 @@ export class EmailService {
       // Verify connection (but don't block startup if it fails)
       this.transporter.verify((error, success) => {
         if (error) {
-          this.logger.error('❌ Email transporter verification failed:', error.message);
-          this.logger.warn('📧 Continuing with email logging mode...');
+    
           this.transporter = null; // Fall back to logging mode
         } else {
-          this.logger.log('✅ Email service is ready to send messages');
+      
         }
       });
     } catch (error) {
-      this.logger.error('❌ Failed to initialize email transporter:', error);
+
       this.transporter = null; // Fall back to logging mode
     }
   }
@@ -90,7 +83,7 @@ export class EmailService {
       text: template.text,
     });
 
-    this.logger.log(`📧 Email verification OTP sent to: ${email}`);
+
   }
 
   /**
@@ -106,7 +99,7 @@ export class EmailService {
       text: template.text,
     });
 
-    this.logger.log(`📧 Password reset OTP sent to: ${email}`);
+
   }
 
   /**
@@ -122,7 +115,7 @@ export class EmailService {
       text: template.text,
     });
 
-    this.logger.log(`📧 Welcome email sent to: ${email}`);
+
   }
 
   /**
@@ -145,7 +138,7 @@ export class EmailService {
       text: template.text,
     });
 
-    this.logger.log(`📧 Account lockout notification sent to: ${email}`);
+ 
   }
 
   /**
@@ -165,7 +158,7 @@ export class EmailService {
       text: template.text,
     });
 
-    this.logger.log(`📧 Security alert sent to: ${email} (type: ${alertType})`);
+ 
   }
 
   /**
@@ -175,16 +168,12 @@ export class EmailService {
     try {
       // Development mode - log only
       if (!this.transporter) {
-        this.logger.debug('📧 [DEV MODE] Email content:', {
-          to: options.to,
-          subject: options.subject,
-          preview: options.text?.substring(0, 100) + '...',
-        });
+     
         
         // Extract and display OTP for development
         const otpMatch = options.text?.match(/(\d{6})/);
         if (otpMatch) {
-          this.logger.warn(`🔑 [DEV] OTP for ${options.to}: ${otpMatch[1]}`);
+       
         }
         
         // Simulate sending delay
@@ -201,14 +190,14 @@ export class EmailService {
         html: options.html,
       });
 
-      this.logger.log(`✅ Email sent successfully: ${info.messageId}`);
+
 
     } catch (error) {
-      this.logger.error(`❌ Failed to send email to ${options.to}:`, error.message);
+  
       
       // Don't throw in development mode
       if (!this.transporter) {
-        this.logger.warn('📧 [DEV MODE] Email failed but continuing...');
+
         return;
       }
       

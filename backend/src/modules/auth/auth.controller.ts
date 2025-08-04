@@ -258,31 +258,17 @@ export class AuthController {
     @Body(ValidationPipe) refreshTokenDto: RefreshTokenDto,
     @Req() req: Request,
   ): Promise<AuthTokens> {
-    console.log('🔄 REFRESH TOKEN REQUEST RECEIVED:', {
-      timestamp: new Date().toISOString(),
-      refreshToken: refreshTokenDto.refreshToken?.substring(0, 20) + '...',
-      userAgent: req.get('User-Agent'),
-      ip: this.getClientIp(req)
-    });
+   
 
     const ipAddress = this.getClientIp(req);
     const userAgent = req.get('User-Agent') || 'Unknown';
 
     try {
       const result = await this.authService.refreshTokens(refreshTokenDto, ipAddress, userAgent);
-      console.log('✅ REFRESH TOKEN SUCCESS:', {
-        timestamp: new Date().toISOString(),
-        newAccessToken: result.accessToken?.substring(0, 20) + '...',
-        newRefreshToken: result.refreshToken?.substring(0, 20) + '...',
-        expiresIn: result.expiresIn
-      });
+   
       return result;
     } catch (error) {
-      console.log('❌ REFRESH TOKEN FAILED:', {
-        timestamp: new Date().toISOString(),
-        error: error.message,
-        stack: error.stack
-      });
+   
       throw error;
     }
   }

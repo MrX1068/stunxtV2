@@ -89,7 +89,7 @@ const secureStorage = {
     try {
       return await SecureStore.getItemAsync(name);
     } catch (error) {
-      console.warn('SecureStore getItem error:', error);
+ 
       return null;
     }
   },
@@ -97,14 +97,14 @@ const secureStorage = {
     try {
       await SecureStore.setItemAsync(name, value);
     } catch (error) {
-      console.warn('SecureStore setItem error:', error);
+      
     }
   },
   removeItem: async (name: string): Promise<void> => {
     try {
       await SecureStore.deleteItemAsync(name);
     } catch (error) {
-      console.warn('SecureStore removeItem error:', error);
+     
     }
   },
 };
@@ -291,7 +291,7 @@ export const useAuthStore = create<AuthState>()(
             
           } catch (error) {
             // Continue with logout even if API call fails
-            console.warn('Logout API call failed:', error);
+           
           } finally {
             // Always clear auth state regardless of API call success/failure
             set({
@@ -367,26 +367,18 @@ export const useAuthStore = create<AuthState>()(
         refreshAuth: async () => {
           const { refreshToken, setLoading, setError, setUser, setToken, isRefreshing } = get();
         
-          console.log('🔄 AUTH: refreshAuth called:', {
-            timestamp: new Date().toISOString(),
-            hasRefreshToken: !!refreshToken,
-            refreshToken: refreshToken?.substring(0, 20) + '...',
-            isRefreshing
-          });
+     
 
           if (!refreshToken) {
-            console.log('❌ AUTH: No refresh token available');
             throw new Error('No refresh token available');
           }
           
           // Prevent multiple simultaneous refresh calls
           if (isRefreshing) {
-            console.log('⏸️ AUTH: Refresh already in progress, skipping...');
             return;
           }
           
           try {
-            console.log('🔄 AUTH: Starting token refresh...');
             // Batch state updates to prevent render-time updates
             set({ 
               isRefreshing: true,
@@ -395,27 +387,18 @@ export const useAuthStore = create<AuthState>()(
             });
             
             const apiStore = useApiStore.getState();
-            console.log('📡 AUTH: Making refresh API call to /auth/refresh');
+      
             const response = await apiStore.post<BaseApiResponse<AuthResult>>('/auth/refresh', {
               refreshToken
             });
             
-            console.log('📡 AUTH: Refresh API response:', {
-              success: response.success,
-              hasData: !!response.data,
-              message: response.message
-            });
+       
             
             if (response.success && response.data) {
               // The refresh response has tokens directly in data, not nested
               const tokens = response.data as any; // Cast since refresh has different structure
               
-              console.log('✅ AUTH: Token refresh successful:', {
-                hasAccessToken: !!tokens.accessToken,
-                hasRefreshToken: !!tokens.refreshToken,
-                accessToken: tokens.accessToken?.substring(0, 20) + '...',
-                newRefreshToken: tokens.refreshToken?.substring(0, 20) + '...'
-              });
+        
               
               // Batch all state updates together
               set({
@@ -426,16 +409,15 @@ export const useAuthStore = create<AuthState>()(
                 isRefreshing: false
               });
             } else {
-              console.log('❌ AUTH: Token refresh failed - invalid response:', response);
+              
               throw new Error(response.message || 'Token refresh failed');
             }
           } catch (error) {
-            console.log('❌ AUTH: Token refresh error:', error);
             // If refresh fails, logout user
             get().logout();
             throw error;
           } finally {
-            console.log('🏁 AUTH: Token refresh finally block - resetting states');
+           
             // Ensure loading states are reset
             set({ 
               isLoading: false,
@@ -495,7 +477,6 @@ export const useAuthStore = create<AuthState>()(
           } catch (error) {
             const message = error instanceof Error ? error.message : 'Failed to refresh user data';
             setError(message);
-            console.warn('Failed to refresh user data:', message);
             // Don't throw error for refresh - it's a background operation
           } finally {
             setLoading(false);
@@ -517,7 +498,6 @@ export const useAuthStore = create<AuthState>()(
           
           // Only refresh if data is stale or if we've never fetched it
           if (isStale || !user.lastFetched) {
-            console.log('User data is stale, refreshing...');
             await refreshUserData();
           }
         },
@@ -580,7 +560,7 @@ if (typeof window !== 'undefined') {
 // Global Auth Store State Logger (like Redux DevTools)
 if (__DEV__) {
   useAuthStore.subscribe((state) => {
-    console.log('🔐 AUTH STORE STATE CHANGE:', {
+    console.log('🔐 AUTH STORE STATE CHANGE:', state, {
       timestamp: new Date().toISOString(),
       user: state.user ? {
         id: state.user.id,

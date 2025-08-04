@@ -58,19 +58,18 @@ export default function SpaceDetailScreen() {
       
       // Clear previous space chat state if it exists
       if (previousConversationId) {
-        console.log('🧹 Clearing previous space chat state:', previousConversationId);
+     
         clearSpaceChatState(previousConversationId);
       }
       
       // Fetch new space data
       fetchSpace(id);
       
-      console.log('🔄 Professional space navigation cleanup completed for space:', id);
+     
     }
     
     // Cleanup function when component unmounts or space ID changes
     return () => {
-      console.log('🧹 Cleaning up space detail screen state');
       if (conversationId) {
         clearSpaceChatState(conversationId);
       }
@@ -86,7 +85,6 @@ export default function SpaceDetailScreen() {
         spaceContent && 
         Array.isArray(spaceContent) && 
         spaceContent.length > 0) {
-      console.log('🔄 Syncing space content with chat messages');
       // Use a timeout to debounce rapid updates
       const timeoutId = setTimeout(() => {
         syncSpaceMessages(currentSpace.id, spaceContent);
@@ -100,7 +98,6 @@ export default function SpaceDetailScreen() {
   useEffect(() => {
     return () => {
       if (currentSpace?.id && currentSpace.interactionType === 'chat') {
-        console.log('🧹 Cleaning up chat state for space:', currentSpace.id);
         clearSpaceChatState(currentSpace.id);
       }
     };
@@ -116,18 +113,11 @@ export default function SpaceDetailScreen() {
   // Monitor connection status for chat spaces
   useEffect(() => {
     if (currentSpace?.interactionType === 'chat') {
-      console.log('🔍 Connection Status Monitor:', {
-        connected: connectionStatus.connected,
-        connecting: connectionStatus.connecting,
-        error: connectionStatus.error,
-        conversationId,
-        spaceId: currentSpace.id,
-        spaceName: currentSpace.name
-      });
+    
 
       // Start periodic status checking
       const statusCheckInterval = setInterval(() => {
-        console.log('🔄 Periodic connection status refresh');
+       
         useChatStore.getState().refreshConnectionStatus();
       }, 5000); // Check every 5 seconds
 
@@ -142,7 +132,7 @@ export default function SpaceDetailScreen() {
     
     try {
       setIsConnecting(true);
-      console.log('🚀 Initializing space chat for:', currentSpace.name);
+     
       
       // Get conversation ID first (this is fast)
       const convId = `space-${currentSpace.id}`;
@@ -150,7 +140,7 @@ export default function SpaceDetailScreen() {
       
       // Load cached messages immediately for instant display
       await loadMessagesFromCache(convId);
-      console.log('✅ Messages loaded from professional cache for conversation:', convId);
+     
       
       // Connect to WebSocket in parallel (don't block UI)
       const connectPromise = connectionStatus.connected 
@@ -167,10 +157,9 @@ export default function SpaceDetailScreen() {
       // Wait for both operations
       await Promise.all([connectPromise, joinPromise]);
       
-      console.log('✅ Space chat initialized, conversation ID:', convId);
+      
       
     } catch (error) {
-      console.error('❌ Failed to initialize space chat:', error);
     } finally {
       setIsConnecting(false);
     }
@@ -184,7 +173,6 @@ export default function SpaceDetailScreen() {
       const contentType = getContentType();
       await fetchSpaceContent(currentSpace.id, contentType);
     } catch (error) {
-      console.error('Failed to refresh content:', error);
     } finally {
       setRefreshing(false);
     }
@@ -206,7 +194,6 @@ export default function SpaceDetailScreen() {
       await fetchSpace(id);
       await handleRefreshContent();
     } catch (error) {
-      console.error('Failed to join space:', error);
       alert('Failed to join space. Please try again.');
     } finally {
       setIsJoining(false);
@@ -220,7 +207,6 @@ export default function SpaceDetailScreen() {
       setIsJoining(true);
       await leaveSpace(id);
     } catch (error) {
-      console.error('Failed to leave space:', error);
       alert('Failed to leave space. Please try again.');
     } finally {
       setIsJoining(false);
@@ -306,18 +292,7 @@ export default function SpaceDetailScreen() {
   const canSendMessage = PermissionManager.canSendMessageInSpace(user, currentSpace);
   const canManageSpace = PermissionManager.canManageSpace(user, currentSpace);
   
-  console.log('🔐 Space Permission Status:', {
-    userId: user?.id,
-    spaceId: currentSpace?.id,
-    canCreatePost,
-    canSendMessage,
-    canManageSpace,
-    userRole: user?.role,
-    memberRole: currentSpace?.memberRole,
-    isOwner: currentSpace?.ownerId === user?.id,
-    isJoined: currentSpace?.isJoined,
-    interactionType: currentSpace?.interactionType
-  });
+
 
   // 🚀 Fetch space content when currentSpace is available AND user has access
   useEffect(() => {
@@ -358,7 +333,6 @@ export default function SpaceDetailScreen() {
         );
       }
     } catch (error) {
-      console.error('Failed to join space:', error);
       Alert.alert(
         'Join Failed',
         'Unable to join the space right now. Please try again.',
@@ -372,27 +346,20 @@ export default function SpaceDetailScreen() {
   const handleSendMessage = async () => {
     if (!chatMessage.trim() || !conversationId || !currentSpace) return;
 
-    console.log('📤 [Space Detail] handleSendMessage called:', {
-      message: chatMessage.trim(),
-      conversationId,
-      spaceId: currentSpace.id,
-      userId: user?.id,
-      timestamp: new Date().toISOString()
-    });
 
     try {
       // For space chat, send via WebSocket and create optimistic message
       if (currentSpace.interactionType === 'chat') {
-        console.log('💬 [Space Detail] Sending space chat message...');
+       
         
         // Send via WebSocket using the new sendMessageToConversation method
         // This will handle optimistic message creation automatically
-        console.log('🌐 [Space Detail] Sending via WebSocket with sendMessageToConversation...');
+       
         const optimisticId = sendMessageToConversation(conversationId, chatMessage.trim(), 'text');
-        console.log('✅ [Space Detail] WebSocket send initiated, optimisticId:', optimisticId);
+     
         
         setChatMessage('');
-        console.log('✅ [Space Detail] Space message sent successfully');
+      
         
         // TODO: When backend space messaging is implemented, also send via API
         // await api.post(`/communities/${currentSpace.communityId}/spaces/${currentSpace.id}/messages`, {
@@ -400,18 +367,13 @@ export default function SpaceDetailScreen() {
         //   type: 'text'
         // });
       } else {
-        console.log('💬 [Space Detail] Sending regular message...');
+       
         // Fallback for non-space conversations
         await sendMessage(chatMessage.trim(), 'text');
         setChatMessage('');
       }
     } catch (error) {
-      console.error('❌ [Space Detail] Failed to send message:', {
-        error: error instanceof Error ? error.message : String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-        conversationId,
-        spaceId: currentSpace.id
-      });
+ 
       Alert.alert('Error', 'Failed to send message. Please try again.');
     }
   };
@@ -438,7 +400,6 @@ export default function SpaceDetailScreen() {
       
       Alert.alert('Success', 'Post created successfully!');
     } catch (error) {
-      console.error('Error creating post:', error);
       Alert.alert('Error', 'Failed to create post. Please try again.');
     }
   };

@@ -169,7 +169,7 @@ export class ConversationService {
       await this.cacheManager.del(`user-conversations:${userId}`);
     }
     
-    this.logger.log(`Created conversation ${savedConversation.id} with ${participants.length} participants`);
+   
     
     return savedConversation;
   }
@@ -228,7 +228,6 @@ export class ConversationService {
     // Clear caches
     await this.clearParticipantCaches(conversationId, userId);
     
-    this.logger.log(`Added user ${userId} to conversation ${conversationId}`);
     
     return savedParticipant;
   }
@@ -265,8 +264,7 @@ export class ConversationService {
     
     // Clear caches
     await this.clearParticipantCaches(conversationId, userId);
-    
-    this.logger.log(`Removed user ${userId} from conversation ${conversationId}`);
+
   }
 
   /**
@@ -298,7 +296,7 @@ export class ConversationService {
     // Get updated conversation
     const updatedConversation = await this.getConversationById(conversationId);
     
-    this.logger.log(`Updated conversation ${conversationId}`);
+
     
     return updatedConversation;
   }

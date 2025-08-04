@@ -143,10 +143,9 @@ export default function CreateSpaceScreen() {
       const space = await createSpace(formData);
       router.back();
       // TODO: Navigate to the created space when space detail screen is ready
-      console.log('Created space:', space.name);
+  
       // router.push(`/space/${space.id}`);
     } catch (error) {
-      console.warn('Failed to create space:', error);
     }
   };
 

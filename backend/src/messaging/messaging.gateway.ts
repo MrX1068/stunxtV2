@@ -68,30 +68,23 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
 
   afterInit(server: Server) {
     this.logger.log('🚀 WebSocket Gateway initialized on /messaging namespace');
-    console.log('🌐 WebSocket server ready to accept connections at /messaging');
   }
 
   async handleConnection(client: AuthenticatedSocket, ...args: any[]) {
     const connectionStart = Date.now();
-    console.log('🔌 New WebSocket connection attempt:', {
-      socketId: client.id,
-      namespace: client.nsp.name,
-      origin: client.handshake.headers.origin,
-      timestamp: new Date().toISOString()
-    });
+
 
     try {
       // Extract token from handshake (optimized)
       const token = client.handshake.auth?.token || client.handshake.headers?.authorization?.replace('Bearer ', '');
       
       if (!token) {
-        console.log('❌ Connection rejected: No token provided');
         client.disconnect();
         return;
       }
 
       // Fast JWT token verification with caching
-      console.log('🔐 JWT token verification starting...');
+
       const tokenCacheKey = `jwt_verification:${token.slice(-10)}`;
       let payload = await this.cacheManager.get<any>(tokenCacheKey);
       
@@ -101,12 +94,7 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
         await this.cacheManager.set(tokenCacheKey, payload, 300000);
       }
       
-      console.log('✅ JWT verification successful:', {
-        userId: payload.sub,
-        username: payload.username,
-        cached: !!payload,
-        verificationTime: Date.now() - connectionStart
-      });
+
       
       client.userId = payload.sub;
       client.user = payload;
@@ -129,8 +117,7 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
       await Promise.all(connectionPromises);
 
       const totalConnectionTime = Date.now() - connectionStart;
-      this.logger.log(`✅ WebSocket: User ${client.userId} connected in ${totalConnectionTime}ms`);
-      console.log(`🔌 WebSocket Connection Success: User ${client.userId} is now online (${totalConnectionTime}ms)`);
+  
 
       // Emit connection success immediately to frontend
       client.emit('connection_success', {
@@ -145,8 +132,6 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
 
     } catch (error) {
       const connectionTime = Date.now() - connectionStart;
-      console.error(`❌ Connection failed in ${connectionTime}ms:`, error.message);
-      this.logger.error(`Connection authentication failed: ${error.message}`);
       client.emit('connection_error', { error: error.message, connectionTime });
       client.disconnect();
     }
@@ -172,7 +157,6 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
       // Clean up room tracking
       this.userRooms.delete(client.id);
 
-      this.logger.log(`User ${client.userId} disconnected from socket ${client.id}`);
     }
   }
 
@@ -186,11 +170,7 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
     try {
       const { conversationId } = data;
       
-      console.log('🔵 [MessagingGateway] Join conversation request:', {
-        conversationId,
-        userId: client.userId,
-        isSpaceConversation: conversationId.startsWith('space-') || conversationId.startsWith('conv_')
-      });
+
       
       // Handle space conversations differently
       if (conversationId.startsWith('space-') || conversationId.startsWith('conv_')) {
@@ -201,10 +181,7 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
         this.userRooms.get(client.id)?.add(conversationId);
 
         client.emit('joined_conversation', { conversationId });
-        console.log('✅ [MessagingGateway] User joined space conversation:', {
-          userId: client.userId,
-          conversationId
-        });
+      
         return;
       }
       
@@ -225,11 +202,9 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
       await this.updateUserConversationActivity(client.userId, conversationId);
 
       client.emit('joined_conversation', { conversationId });
-      this.logger.log(`User ${client.userId} joined conversation ${conversationId}`);
 
     } catch (error) {
       client.emit('error', { message: 'Failed to join conversation' });
-      this.logger.error(`Join conversation error: ${error.message}`);
     }
   }
 
@@ -250,7 +225,6 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
     this.stopUserTyping(conversationId, client.userId);
 
     client.emit('left_conversation', { conversationId });
-    this.logger.log(`User ${client.userId} left conversation ${conversationId}`);
   }
 
   @SubscribeMessage('typing_start')
@@ -345,19 +319,12 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
       attachments?: any[];
     },
   ) {
-    console.log('🚀 [WebSocket Gateway] send_message event received:', {
-      userId: client.userId,
-      conversationId: data.conversationId,
-      content: data.content?.substring(0, 100),
-      optimisticId: data.optimisticId,
-      type: data.type || 'text',
-      timestamp: new Date().toISOString()
-    });
+
 
     try {
       // Validate input data
       if (!data.conversationId || !data.content?.trim()) {
-        console.error('❌ [WebSocket Gateway] Invalid message data:', data);
+       
         client.emit('message_error', {
           optimisticId: data.optimisticId,
           error: 'Invalid message data: missing conversationId or content',
@@ -368,11 +335,7 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
 
       // Check if conversation exists or is a space conversation
       const isSpaceConversation = data.conversationId.startsWith('space-');
-      console.log('🔍 [WebSocket Gateway] Conversation type check:', {
-        conversationId: data.conversationId,
-        isSpaceConversation,
-        userId: client.userId
-      });
+
 
       // Create the message DTO
       const messageDto = {
@@ -383,22 +346,17 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
         attachments: data.attachments || [],
       };
 
-      console.log('📦 [WebSocket Gateway] Prepared message DTO:', messageDto);
+
 
       // Send message through service with detailed logging
-      console.log('💾 [WebSocket Gateway] Calling messageService.sendMessage...');
+  
       const result = await this.messageService.sendMessage(
         client.userId,
         messageDto,
         data.optimisticId
       );
 
-      console.log('✅ [WebSocket Gateway] MessageService response:', {
-        messageId: result.message?.id,
-        optimisticId: data.optimisticId,
-        participants: result.participants?.length,
-        hasUnreadCounts: !!result.unreadCounts
-      });
+
 
       // Emit immediate confirmation back to sender
       client.emit('message_sent', {
@@ -408,7 +366,7 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
         timestamp: new Date().toISOString(),
       });
 
-      console.log('📤 [WebSocket Gateway] Sent confirmation to sender:', client.userId);
+      
 
       // Broadcast to conversation participants
       const roomName = `conversation:${data.conversationId}`;
@@ -419,12 +377,7 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
       };
 
       client.to(roomName).emit('new_message', broadcastData);
-      console.log('📢 [WebSocket Gateway] Broadcasted to room:', {
-        roomName,
-        messageId: result.message?.id,
-        participantCount: result.participants?.length
-      });
-
+   
       // Also emit the message.sent event for additional listeners
       this.eventEmitter.emit('message.sent', {
         message: result.message,
@@ -434,19 +387,11 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
         timestamp: new Date().toISOString(),
       });
 
-      console.log('🎯 [WebSocket Gateway] Emitted message.sent event for additional processing');
+  
 
     } catch (error) {
-      console.error('❌ [WebSocket Gateway] send_message error:', {
-        error: error.message,
-        stack: error.stack,
-        userId: client.userId,
-        conversationId: data.conversationId,
-        optimisticId: data.optimisticId,
-        timestamp: new Date().toISOString()
-      });
 
-      this.logger.error(`WebSocket send_message error: ${error.message}`, error.stack);
+
 
       // Emit error back to sender with detailed info
       client.emit('message_error', {
@@ -456,7 +401,6 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
         timestamp: new Date().toISOString(),
       });
 
-      console.log('📤 [WebSocket Gateway] Sent error response to sender:', client.userId);
     }
   }
 
@@ -664,7 +608,6 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
         this.userRooms.get(client.id)?.add(conversation.id);
       }
 
-      this.logger.log(`User ${client.userId} auto-joined ${conversations.length} conversations`);
     } catch (error) {
       this.logger.error(`Auto-join conversations error: ${error.message}`);
     }

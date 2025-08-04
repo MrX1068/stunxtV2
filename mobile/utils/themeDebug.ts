@@ -6,10 +6,9 @@ import * as SecureStore from "expo-secure-store";
 export const debugTheme = async () => {
   try {
     const storedTheme = await SecureStore.getItemAsync("app-theme-mode");
-    console.log("🔍 Current stored theme:", storedTheme);
+
     return storedTheme;
   } catch (error) {
-    console.error("❌ Error reading theme:", error);
     return null;
   }
 };
@@ -17,10 +16,9 @@ export const debugTheme = async () => {
 export const resetTheme = async () => {
   try {
     await SecureStore.deleteItemAsync("app-theme-mode");
-    console.log("✅ Theme reset successfully - will use system default");
+   
     return true;
   } catch (error) {
-    console.error("❌ Error resetting theme:", error);
     return false;
   }
 };
@@ -28,10 +26,9 @@ export const resetTheme = async () => {
 export const setTheme = async (mode: 'light' | 'dark' | 'system') => {
   try {
     await SecureStore.setItemAsync("app-theme-mode", mode);
-    console.log(`✅ Theme set to: ${mode}`);
+ 
     return true;
   } catch (error) {
-    console.error("❌ Error setting theme:", error);
     return false;
   }
 };

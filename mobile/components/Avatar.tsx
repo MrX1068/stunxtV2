@@ -79,7 +79,6 @@ export function Avatar({
       resizeMode="cover"
       onError={() => {
         // Could implement fallback on error here
-        console.warn('Avatar image failed to load:', optimizedUrl);
       }}
       {...props}
     />

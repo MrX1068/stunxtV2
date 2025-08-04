@@ -289,26 +289,19 @@ export class UserController {
     @Request() req,
     @UploadedFile() file: Express.Multer.File,
   ) {
-    console.log('=== Avatar Upload Debug ===');
-    console.log('File received:', !!file);
-    console.log('User ID:', req.user?.id);
+
     
     if (file) {
-      console.log('File details:', {
-        originalname: file.originalname,
-        mimetype: file.mimetype,
-        size: file.size,
-        hasBuffer: !!file.buffer
-      });
+  
     }
 
     if (!file) {
-      console.log('❌ No file provided');
+     
       throw new BadRequestException('No file provided');
     }
 
     try {
-      console.log('📤 Starting gRPC upload...');
+     
       // Upload via gRPC to file service
       const uploadResult = await this.grpcFileClient.uploadFile(
         file.buffer,
@@ -318,13 +311,13 @@ export class UserController {
         'public',
         req.user.id,
       );
-      console.log('✅ gRPC upload successful:', uploadResult);
+    
 
       // Update user's avatar URL
       await this.userService.updateUser(req.user.id, { 
         avatarUrl: uploadResult.url 
       });
-      console.log('✅ User updated with avatar URL');
+      
 
       return {
         success: true,
@@ -336,12 +329,7 @@ export class UserController {
         }
       };
     } catch (error) {
-      console.error('❌ gRPC file service upload error:', error);
-      console.error('Error details:', {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-      });
+   
       throw new BadRequestException('Failed to upload avatar');
     }
   }
@@ -387,7 +375,6 @@ export class UserController {
         }
       };
     } catch (error) {
-      console.error('gRPC file service upload error:', error);
       throw new BadRequestException('Failed to upload banner');
     }
   }

@@ -104,7 +104,6 @@ export default function CreateCommunityScreen() {
       // Navigate to the created community directly, this will replace the current screen
       router.replace(`/community/${community.id}`);
     } catch (error) {
-      console.warn('Failed to create community:', error);
     }
   };
 

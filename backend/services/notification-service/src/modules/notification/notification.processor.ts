@@ -30,7 +30,6 @@ export class NotificationProcessor {
     const notification = job.data;
     
     try {
-      this.logger.log(`Processing notification: ${notification.id} (${notification.type})`);
 
       let result: any;
 
@@ -82,10 +81,9 @@ export class NotificationProcessor {
         },
       );
 
-      this.logger.log(`Notification sent successfully: ${notification.id}`);
 
     } catch (error) {
-      this.logger.error(`Failed to process notification ${notification.id}:`, error);
+   
 
       // Update notification status on failure
       await this.notificationService.updateNotificationStatus(
@@ -110,6 +108,6 @@ export class NotificationProcessor {
   private async incrementRetryCount(notificationId: string): Promise<void> {
     // This would need a direct repository update
     // For now, we'll log it
-    this.logger.warn(`Incrementing retry count for notification: ${notificationId}`);
+
   }
 }

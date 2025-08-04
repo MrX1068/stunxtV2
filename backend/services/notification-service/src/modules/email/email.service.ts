@@ -34,7 +34,7 @@ export class EmailService {
     const apiKey = this.configService.get('BREVO_API_KEY');
     
     if (!apiKey) {
-      this.logger.error('BREVO_API_KEY not configured');
+\
       return;
     }
 
@@ -50,7 +50,7 @@ export class EmailService {
       name: this.configService.get('BREVO_SENDER_NAME', 'StuntX Platform'),
     };
 
-    this.logger.log('Brevo email service initialized');
+
   }
 
   /**
@@ -99,7 +99,7 @@ export class EmailService {
       // Send email
       const response = await this.apiInstance.sendTransacEmail(sendSmtpEmail);
       
-      this.logger.log(`Email sent successfully to ${dto.to}. Message ID: ${response.messageId}`);
+  
       
       return {
         success: true,
@@ -107,7 +107,6 @@ export class EmailService {
       };
 
     } catch (error) {
-      this.logger.error(`Failed to send email to ${dto.to}:`, error);
       
       return {
         success: false,
@@ -139,7 +138,6 @@ export class EmailService {
 
       const response = await this.apiInstance.sendTransacEmail(sendSmtpEmail);
       
-      this.logger.log(`Template email sent successfully to ${to}. Template ID: ${templateId}, Message ID: ${response.messageId}`);
       
       return {
         success: true,
@@ -147,7 +145,6 @@ export class EmailService {
       };
 
     } catch (error) {
-      this.logger.error(`Failed to send template email to ${to}:`, error);
       
       return {
         success: false,
@@ -303,7 +300,6 @@ export class EmailService {
       };
       
     } catch (error) {
-      this.logger.error('Failed to get delivery stats:', error);
       return null;
     }
   }

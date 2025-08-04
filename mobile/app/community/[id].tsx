@@ -43,21 +43,18 @@ export default function CommunityDetailScreen() {
 
   useEffect(() => {
     if (id) {
-      console.log('🏘️ Loading community details for ID:', id);
       
       // Fetch community details
       const communityData = getCommunityById(id);
-      console.log('📋 Community data:', communityData);
       setCommunity(communityData || null);
       
       // 🔧 FIX: Ensure spaces are fetched correctly
       const loadCommunitySpaces = async () => {
         try {
-          console.log('🚀 Fetching spaces for community:', id);
+          
           await fetchSpacesByCommunity(id);
-          console.log('✅ Spaces fetched successfully');
+         
         } catch (error) {
-          console.warn('❌ Failed to fetch spaces for community:', id, error);
         }
       };
       
@@ -75,7 +72,6 @@ export default function CommunityDetailScreen() {
   };
 
   const handleSpacePress = (space: Space) => {
-    console.log('🚀 Navigating to space:', space.name, 'Type:', space.interactionType);
     router.push(`/space/${space.id}` as any);
   };
 
@@ -83,7 +79,6 @@ export default function CommunityDetailScreen() {
     try {
       await joinSpace(spaceId);
     } catch (error) {
-      console.warn('Failed to join space:', error);
     }
   };
 
@@ -91,7 +86,6 @@ export default function CommunityDetailScreen() {
     try {
       await leaveSpace(spaceId);
     } catch (error) {
-      console.warn('Failed to leave space:', error);
     }
   };
 
@@ -112,27 +106,13 @@ export default function CommunityDetailScreen() {
 
   // Get spaces for this specific community from the communitySpaces object
   const currentCommunitySpaces = id ? (communitySpaces[id] || []) : [];
-  console.log('📦 Current community spaces:', { 
-    communityId: id, 
-    spacesCount: currentCommunitySpaces.length,
-    communitySpacesKeys: Object.keys(communitySpaces)
-  });
+ 
   
   // 🛡️ Professional Role-Based Permissions
   const canCreateSpace = PermissionManager.canCreateSpaceInCommunity(user, community);
   const canManageCommunity = PermissionManager.canManageCommunity(user, community);
   
-  console.log('🔐 Permission Status:', {
-    userId: user?.id,
-    communityId: community?.id,
-    canCreateSpace,
-    canManageCommunity,
-    userRole: user?.role,
-    memberRole: community?.memberRole,
-    isOwner: community?.ownerId === user?.id,
-    isJoined: community?.isJoined,
-    allowSpaceCreation: community?.allowSpaceCreation
-  });
+
 
   // 🚀 Professional UX - Industry Standard Join Logic (Telegram/WhatsApp Pattern)
   const getJoinActionConfig = () => {
@@ -211,7 +191,6 @@ export default function CommunityDetailScreen() {
       const updatedCommunity = getCommunityById(community.id);
       setCommunity(updatedCommunity || null);
     } catch (error) {
-      console.error('Failed to join community:', error);
       Alert.alert(
         'Join Failed',
         'Unable to join the community right now. Please try again.',

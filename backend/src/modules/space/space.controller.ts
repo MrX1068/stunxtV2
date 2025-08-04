@@ -46,7 +46,7 @@ export class SpaceController {
     private readonly spaceService: SpaceService,
     private readonly spaceMemberService: SpaceMemberService,
   ) {
-    console.log('🚀 [SpaceController] Controller initialized with content endpoints');
+   
   }
 
   @Post()
@@ -475,10 +475,7 @@ export class SpaceController {
     @Query('before') before?: string,
     @Query('after') after?: string,
   ) {
-    console.log('🔵 [SpaceController] GET /content endpoint hit');
-    console.log('🔵 [SpaceController] Params:', { communityId, spaceId });
-    console.log('🔵 [SpaceController] Query params:', { limit, offset, contentType, before, after });
-    console.log('🔵 [SpaceController] User ID:', req.user?.id);
+   
     
     try {
       const result = await this.spaceService.getSpaceContent(spaceId, req.user.id, {
@@ -488,10 +485,10 @@ export class SpaceController {
         before,
         after,
       });
-      console.log('✅ [SpaceController] Content retrieved successfully:', result);
+      
       return result;
     } catch (error) {
-      console.error('❌ [SpaceController] Error getting space content:', error);
+     
       throw error;
     }
   }
@@ -540,17 +537,14 @@ export class SpaceController {
     @Body() createContentDto: any,
     @Request() req: any,
   ) {
-    console.log('🟡 [SpaceController] POST /content endpoint hit');
-    console.log('🟡 [SpaceController] Params:', { communityId, spaceId });
-    console.log('🟡 [SpaceController] Body:', createContentDto);
-    console.log('🟡 [SpaceController] User ID:', req.user?.id);
+   
     
     try {
       const result = await this.spaceService.createSpaceContent(spaceId, req.user.id, createContentDto);
-      console.log('✅ [SpaceController] Content created successfully:', result);
+
       return result;
     } catch (error) {
-      console.error('❌ [SpaceController] Error creating space content:', error);
+      
       throw error;
     }
   }
@@ -670,9 +664,7 @@ export class GlobalSpaceController {
     @Request() req: any,
     @Body() body: { spaceName?: string },
   ) {
-    console.log('🔵 [SpaceController] POST /chat/conversation endpoint hit');
-    console.log('🔵 [SpaceController] Params:', { communityId, spaceId, spaceName: body.spaceName });
-    console.log('🔵 [SpaceController] User ID:', req.user?.id);
+   
     
     try {
       const conversationId = await this.spaceService.getOrCreateSpaceConversation(
@@ -681,14 +673,13 @@ export class GlobalSpaceController {
         body.spaceName
       );
       
-      console.log('✅ [SpaceController] Space conversation created/retrieved:', conversationId);
+   
       return { 
         success: true, 
         data: { conversationId },
         message: 'Space conversation ready'
       };
     } catch (error) {
-      console.error('❌ [SpaceController] Error creating space conversation:', error);
       throw error;
     }
   }
@@ -717,10 +708,7 @@ export class GlobalSpaceController {
     @Request() req: any,
     @Body() body: { content: string; type?: 'text' | 'image' | 'file' },
   ) {
-    console.log('🔵 [SpaceController] POST /chat/message endpoint hit');
-    console.log('🔵 [SpaceController] Params:', { communityId, spaceId, type: body.type });
-    console.log('🔵 [SpaceController] User ID:', req.user?.id);
-    console.log('🔵 [SpaceController] Content length:', body.content?.length);
+
     
     try {
       const result = await this.spaceService.sendSpaceMessage(spaceId, req.user.id, {
@@ -728,14 +716,14 @@ export class GlobalSpaceController {
         type: body.type || 'text'
       });
       
-      console.log('✅ [SpaceController] Space message sent successfully');
+     
       return {
         success: true,
         data: result,
         message: 'Message sent successfully'
       };
     } catch (error) {
-      console.error('❌ [SpaceController] Error sending space message:', error);
+      
       throw error;
     }
   }
@@ -757,9 +745,7 @@ export class GlobalSpaceController {
     @Query('limit') limit: number = 50,
     @Query('before') before?: string,
   ) {
-    console.log('🔵 [SpaceController] GET /chat/messages endpoint hit');
-    console.log('🔵 [SpaceController] Params:', { communityId, spaceId, limit, before });
-    console.log('🔵 [SpaceController] User ID:', req.user?.id);
+   
     
     try {
       const result = await this.spaceService.getSpaceMessages(spaceId, req.user.id, {
@@ -767,10 +753,9 @@ export class GlobalSpaceController {
         before
       });
       
-      console.log('✅ [SpaceController] Space messages retrieved:', result?.messages?.length || 0);
+     
       return result;
     } catch (error) {
-      console.error('❌ [SpaceController] Error getting space messages:', error);
       throw error;
     }
   }

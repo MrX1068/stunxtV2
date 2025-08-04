@@ -107,13 +107,6 @@ import { JwtAuthGuard } from '../modules/auth/guards/jwt-auth.guard';
 })
 export class MessagingModule {
   constructor() {
-    console.log('🚀 Enterprise Messaging Module initialized with:');
-    console.log('   ✅ Optimistic Updates for zero-delay UX');
-    console.log('   ✅ Redis caching for lightning-fast performance');
-    console.log('   ✅ WebSocket real-time communication');
-    console.log('   ✅ Enterprise-grade delivery tracking');
-    console.log('   ✅ Professional threading & reactions');
-    console.log('   ✅ Advanced moderation & rate limiting');
-    console.log('   ✅ Comprehensive read receipts & typing indicators');
+   
   }
 }

@@ -30,7 +30,7 @@ export class DirectFileService {
     userId?: string,
   ): Promise<FileUploadResult> {
     try {
-      this.logger.log(`gRPC upload: ${originalName} (${fileBuffer.length} bytes)`);
+  
 
       // Use gRPC client for microservice communication
       const result = await this.grpcFileClient.uploadFile(
@@ -52,7 +52,7 @@ export class DirectFileService {
         privacy: result.privacy as 'public' | 'private',
       };
     } catch (error) {
-      this.logger.error(`gRPC upload failed: ${error.message}`, error.stack);
+  
       throw error;
     }
   }
@@ -63,9 +63,9 @@ export class DirectFileService {
   async deleteFile(fileId: string, userId?: string): Promise<void> {
     try {
       await this.grpcFileClient.deleteFile(fileId, userId || 'anonymous');
-      this.logger.log(`File deleted via gRPC: ${fileId}`);
+   
     } catch (error) {
-      this.logger.error(`gRPC delete failed: ${error.message}`, error.stack);
+
       throw error;
     }
   }

@@ -17,7 +17,7 @@ export class WebhookController {
     @Body() body: any,
     @Headers() headers: any,
   ) {
-    this.logger.log('Received Brevo webhook');
+
     
     // TODO: Verify webhook signature for security
     // const signature = headers['x-sib-signature'];
@@ -33,7 +33,7 @@ export class WebhookController {
     @Body() body: any,
     @Headers() headers: any,
   ) {
-    this.logger.log('Received FCM webhook');
+
     
     await this.webhookService.handleFCMWebhook(body);
     return { success: true };
@@ -46,7 +46,7 @@ export class WebhookController {
     @Body() body: any,
     @Headers() headers: any,
   ) {
-    this.logger.log('Received Twilio webhook');
+
     
     // TODO: Verify webhook signature for security
     // const signature = headers['x-twilio-signature'];

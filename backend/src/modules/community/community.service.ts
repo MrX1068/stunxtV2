@@ -553,9 +553,8 @@ export class CommunityService {
         2
       );
 
-      console.log(`✅ Default spaces created for community ${communityId}`);
+   
     } catch (error) {
-      console.error(`❌ Failed to create default spaces for community ${communityId}:`, error);
       // Don't throw error to prevent community creation from failing
     }
   }

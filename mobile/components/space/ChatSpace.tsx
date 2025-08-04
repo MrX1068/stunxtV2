@@ -72,7 +72,6 @@ export function ChatSpace({ space, messages: postMessages = [], isLoading = fals
     try {
       // TODO: Send to real API
       // await sendMessageToAPI(space.id, messageText);
-      console.log('Sending message:', messageText, 'to space:', space.id);
       
       setMessageText('');
       
@@ -81,7 +80,6 @@ export function ChatSpace({ space, messages: postMessages = [], isLoading = fals
         flatListRef.current?.scrollToEnd({ animated: true });
       }, 100);
     } catch (error) {
-      console.error('Failed to send message:', error);
     } finally {
       setIsSending(false);
     }

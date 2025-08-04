@@ -29,18 +29,17 @@ export const TokenRefreshTester: React.FC = () => {
 
   const handleTestApiCall = async () => {
     try {
-      console.log('🚀 Making test API call to /communities...');
+     
       const result = await get('/communities');
-      console.log('✅ API call successful:', result);
+     
       Alert.alert('Success', 'API call completed! Check console for details.');
     } catch (error) {
-      console.error('❌ API call failed:', error);
       Alert.alert('Error', 'API call failed! Check console for details.');
     }
   };
 
   const handleTestMultipleCalls = async () => {
-    console.log('🚀 Testing multiple simultaneous API calls...');
+   
     const results = await testMultipleApiCalls();
     Alert.alert('Test Complete', 'Multiple API calls test completed! Check console for results.');
   };

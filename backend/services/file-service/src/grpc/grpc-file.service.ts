@@ -59,16 +59,14 @@ export class GrpcFileService implements OnModuleInit, FileServiceServer {
         grpc.ServerCredentials.createInsecure(),
         (err, boundPort) => {
           if (err) {
-            this.logger.error('Failed to start gRPC server:', err);
             throw err;
           }
           
           this.server.start();
-          this.logger.log(`gRPC File Service started on ${host}:${boundPort}`);
+          
         }
       );
     } catch (error) {
-      this.logger.error('gRPC server initialization failed:', error);
       throw error;
     }
   }
@@ -83,7 +81,7 @@ export class GrpcFileService implements OnModuleInit, FileServiceServer {
     try {
       const { file_data, original_name, mime_type, category, privacy, user_id } = call.request;
 
-      this.logger.log(`gRPC Upload request: ${original_name} for user: ${user_id}`);
+    
 
       // Convert gRPC buffer to Node.js Buffer
       const fileBuffer = Buffer.from(file_data);
@@ -128,7 +126,7 @@ export class GrpcFileService implements OnModuleInit, FileServiceServer {
       });
 
     } catch (error) {
-      this.logger.error('gRPC Upload failed:', error);
+
       
       callback({
         code: grpc.status.INTERNAL,
@@ -147,7 +145,7 @@ export class GrpcFileService implements OnModuleInit, FileServiceServer {
     try {
       const { file_id, user_id } = call.request;
 
-      this.logger.log(`gRPC Delete request: ${file_id} for user: ${user_id}`);
+    
 
       // TODO: Implement delete functionality in upload service
       // await this.uploadService.deleteFile(file_id, user_id);
@@ -158,7 +156,7 @@ export class GrpcFileService implements OnModuleInit, FileServiceServer {
       });
 
     } catch (error) {
-      this.logger.error('gRPC Delete failed:', error);
+ 
       
       callback({
         code: grpc.status.INTERNAL,
@@ -177,7 +175,7 @@ export class GrpcFileService implements OnModuleInit, FileServiceServer {
     try {
       const { file_id, user_id } = call.request;
 
-      this.logger.log(`gRPC GetFileInfo request: ${file_id} for user: ${user_id}`);
+ 
 
       // TODO: Implement get file info functionality
       // const fileInfo = await this.uploadService.getFileInfo(file_id, user_id);
@@ -198,7 +196,7 @@ export class GrpcFileService implements OnModuleInit, FileServiceServer {
       });
 
     } catch (error) {
-      this.logger.error('gRPC GetFileInfo failed:', error);
+  
       
       callback({
         code: grpc.status.INTERNAL,
@@ -209,7 +207,7 @@ export class GrpcFileService implements OnModuleInit, FileServiceServer {
 
   async onApplicationShutdown() {
     if (this.server) {
-      this.logger.log('Shutting down gRPC server...');
+   
       this.server.forceShutdown();
     }
   }

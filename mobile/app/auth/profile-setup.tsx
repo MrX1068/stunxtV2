@@ -88,27 +88,16 @@ export default function ProfileSetupScreen() {
 
       // Show processing progress
       setUploadStatus(prev => ({ ...prev, progress: 75 }));
-
-      console.log("uploadResponse", uploadResponse);
-      console.log("uploadResponse.success", uploadResponse.success);
-      console.log("uploadResponse.data", uploadResponse.data);
-      console.log("uploadResponse.data?.avatarUrl", uploadResponse.data?.data?.avatarUrl);
-
       // Check for success response - backend returns { success: true, data: { avatarUrl: "..." } }
       if (uploadResponse.success && uploadResponse.data?.data?.avatarUrl) {
-        console.log("✅ Upload successful, setting avatar URL:", uploadResponse.data?.data?.avatarUrl);
         setUploadStatus({ uploading: false, progress: 100, error: null });
         setFormData(prev => ({ ...prev, avatarUrl: uploadResponse.data?.data?.avatarUrl }));
         return uploadResponse.data?.data?.avatarUrl;
       } else {
-        console.log("❌ Upload response validation failed");
-        console.log("Success check:", uploadResponse.success);
-        console.log("Data check:", uploadResponse.data);
-        console.log("Avatar URL check:", uploadResponse.data?.data?.avatarUrl);
         throw new Error('Upload failed - no URL returned');
       }
     } catch (uploadError) {
-      console.error('Avatar upload failed:', uploadError);
+
       setUploadStatus({ 
         uploading: false, 
         progress: 0, 
@@ -157,7 +146,6 @@ export default function ProfileSetupScreen() {
         }
       }
     } catch (error) {
-      console.error('Error picking image:', error);
       setUploadStatus({ uploading: false, progress: 0, error: 'Failed to pick image' });
     }
   };

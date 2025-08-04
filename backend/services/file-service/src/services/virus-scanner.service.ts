@@ -22,16 +22,16 @@ export class VirusScannerService implements OnModuleInit {
 
   async onModuleInit() {
     if (!this.isEnabled) {
-      this.logger.warn('Virus scanning is disabled in configuration');
+      
       return;
     }
 
     try {
       await this.initializeClamScan();
-      this.logger.log('Virus scanner initialized successfully');
+   
     } catch (error) {
-      this.logger.error('Failed to initialize virus scanner:', error);
-      this.logger.warn('Continuing without virus scanning - uploads will not be scanned');
+    
+    
       this.isEnabled = false;
     }
   }
@@ -71,12 +71,12 @@ export class VirusScannerService implements OnModuleInit {
    */
   async scanBuffer(buffer: Buffer, filename?: string): Promise<ScanResult> {
     if (!this.isEnabled || !this.clamscan) {
-      this.logger.debug('Virus scanning is disabled or not initialized - skipping scan');
+     
       return { isInfected: false, viruses: [] };
     }
 
     try {
-      this.logger.debug(`Scanning ${filename || 'buffer'} (${buffer.length} bytes)`);
+
       
       // Convert buffer to stream for better compatibility
       const { Readable } = require('stream');
@@ -93,14 +93,14 @@ export class VirusScannerService implements OnModuleInit {
       };
 
       if (scanResult.isInfected) {
-        this.logger.warn(`Virus detected in ${filename || 'buffer'}: ${scanResult.viruses.join(', ')}`);
+       
       } else {
-        this.logger.debug(`File ${filename || 'buffer'} is clean`);
+   
       }
 
       return scanResult;
     } catch (error) {
-      this.logger.error(`Virus scan failed for ${filename || 'buffer'}:`, error);
+   
       
       // In production, you might want to reject uploads if scanning fails
       // For now, we'll allow uploads to continue with a warning
@@ -108,7 +108,7 @@ export class VirusScannerService implements OnModuleInit {
         throw new Error(`Virus scan failed: ${error.message}`);
       }
       
-      this.logger.warn('Virus scan failed - allowing upload to continue (non-strict mode)');
+  
       return { isInfected: false, viruses: [] };
     }
   }
@@ -118,12 +118,12 @@ export class VirusScannerService implements OnModuleInit {
    */
   async scanFile(filePath: string): Promise<ScanResult> {
     if (!this.isEnabled || !this.clamscan) {
-      this.logger.debug('Virus scanning is disabled or not initialized - skipping scan');
+
       return { isInfected: false, viruses: [] };
     }
 
     try {
-      this.logger.debug(`Scanning file: ${filePath}`);
+    
       
       const result = await this.clamscan.scanFile(filePath);
       
@@ -136,20 +136,20 @@ export class VirusScannerService implements OnModuleInit {
       };
 
       if (scanResult.isInfected) {
-        this.logger.warn(`Virus detected in ${filePath}: ${scanResult.viruses.join(', ')}`);
+     
       } else {
-        this.logger.debug(`File ${filePath} is clean`);
+ 
       }
 
       return scanResult;
     } catch (error) {
-      this.logger.error(`Virus scan failed for ${filePath}:`, error);
+
       
       if (this.configService.get<boolean>('VIRUS_SCAN_STRICT', false)) {
         throw new Error(`Virus scan failed: ${error.message}`);
       }
       
-      this.logger.warn('Virus scan failed - allowing operation to continue (non-strict mode)');
+   
       return { isInfected: false, viruses: [] };
     }
   }
@@ -172,7 +172,7 @@ export class VirusScannerService implements OnModuleInit {
     try {
       return await this.clamscan.getVersion();
     } catch (error) {
-      this.logger.error('Failed to get virus scanner version:', error);
+
       return null;
     }
   }

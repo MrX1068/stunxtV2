@@ -30,7 +30,7 @@ export class CloudinaryProvider extends StorageProviderInterface {
     const apiSecret = this.configService.get('CLOUDINARY_API_SECRET');
 
     if (!cloudName || !apiKey || !apiSecret) {
-      this.logger.warn('Cloudinary credentials not configured properly');
+
       return;
     }
 
@@ -41,7 +41,6 @@ export class CloudinaryProvider extends StorageProviderInterface {
       secure: true,
     });
 
-    this.logger.log('Cloudinary provider initialized successfully');
   }
 
   async upload(options: UploadOptions): Promise<UploadResult> {
@@ -66,16 +65,16 @@ export class CloudinaryProvider extends StorageProviderInterface {
         uploadOptions.type = 'private';
       }
 
-      this.logger.log(`🚀 Starting Cloudinary upload to folder: ${folder}`);
+
 
       // Use the official documentation pattern - simple upload_stream
       const result: UploadApiResponse = await new Promise((resolve, reject) => {
         cloudinary.uploader.upload_stream(uploadOptions, (error, uploadResult) => {
           if (error) {
-            this.logger.error('❌ Cloudinary upload error:', error);
+           
             reject(error);
           } else {
-            this.logger.log('✅ Cloudinary upload successful:', uploadResult?.public_id);
+
             resolve(uploadResult as UploadApiResponse);
           }
         }).end(options.buffer);
@@ -96,7 +95,7 @@ export class CloudinaryProvider extends StorageProviderInterface {
       };
 
     } catch (error) {
-      this.logger.error('Failed to upload file to Cloudinary:', error);
+
       throw new Error(`Cloudinary upload failed: ${error.message}`);
     }
   }
@@ -149,7 +148,7 @@ export class CloudinaryProvider extends StorageProviderInterface {
       };
 
     } catch (error) {
-      this.logger.error('Failed to process file with Cloudinary:', error);
+
       throw new Error(`Cloudinary processing failed: ${error.message}`);
     }
   }
@@ -169,15 +168,15 @@ export class CloudinaryProvider extends StorageProviderInterface {
       const result = await cloudinary.uploader.destroy(publicId);
       
       if (result.result === 'ok') {
-        this.logger.log(`File deleted from Cloudinary: ${publicId}`);
+    
         return true;
       } else {
-        this.logger.warn(`Failed to delete file from Cloudinary: ${publicId} - ${result.result}`);
+
         return false;
       }
 
     } catch (error) {
-      this.logger.error('Failed to delete file from Cloudinary:', error);
+ 
       
       if (options.force) {
         return true; // Return true if force delete is enabled
@@ -192,7 +191,7 @@ export class CloudinaryProvider extends StorageProviderInterface {
       const info = await cloudinary.api.resource(publicId);
       return info;
     } catch (error) {
-      this.logger.error('Failed to get file info from Cloudinary:', error);
+   
       throw new Error(`Failed to get file info: ${error.message}`);
     }
   }
@@ -211,7 +210,7 @@ export class CloudinaryProvider extends StorageProviderInterface {
 
       return signedUrl;
     } catch (error) {
-      this.logger.error('Failed to generate signed URL:', error);
+
       throw new Error(`Failed to generate signed URL: ${error.message}`);
     }
   }
@@ -248,7 +247,7 @@ export class CloudinaryProvider extends StorageProviderInterface {
         const url = cloudinary.url(publicId, config);
         variants[config.name] = url;
       } catch (error) {
-        this.logger.warn(`Failed to generate ${config.name} variant:`, error);
+     
       }
     }
 

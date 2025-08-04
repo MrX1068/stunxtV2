@@ -175,7 +175,7 @@ export const useApiStore = create<ApiState>()(
           if (token) {
             defaultHeaders.Authorization = `Bearer ${token}`;
           }
-          console.log("fetch url =>>>>>>>>>>>", url)
+  
           // Debug log removed: url
           const response = await fetch(url, {
             ...options,
@@ -185,22 +185,16 @@ export const useApiStore = create<ApiState>()(
             },
           });
           // Removed debug log for response to clean up production code
-          console.log("response =>>>>>>>>> ", response)
+    
           // Handle token expiry with automatic refresh
           // For logout endpoint: try refresh once to enable proper server-side cleanup
           // For other endpoints: normal refresh behavior
           if (response.status === 401 && token && endpoint !== '/auth/refresh') {
             const { isRefreshingToken } = get(); // Check current refresh state
-            console.log('🔄 API: 401 detected:', {
-              endpoint,
-              timestamp: new Date().toISOString(),
-              currentToken: token?.substring(0, 20) + '...',
-              refreshInProgress: isRefreshingToken
-            });
+     
 
             // If refresh is already in progress, queue this request
             if (isRefreshingToken) {
-              console.log('📋 API: Queueing request (refresh in progress):', endpoint);
               return new Promise((resolve, reject) => {
                 refreshQueue.push({
                   resolve,
@@ -233,21 +227,17 @@ export const useApiStore = create<ApiState>()(
             }
 
             // First request that gets 401 - start the refresh process
-            console.log('🚀 API: Starting token refresh process for:', endpoint);
             try {
               set({ isRefreshingToken: true });
               
               // Try to refresh the token - get fresh auth state
-              console.log('🔄 API: Calling refreshAuth()...');
               const currentAuthState = useAuthStore.getState();
               await currentAuthState.refreshAuth();
-              console.log('✅ API: Token refresh completed');
               
               // Process queued requests
               const queuedRequests = [...refreshQueue];
               refreshQueue.length = 0; // Clear the queue
               
-              console.log('📤 API: Processing queued requests:', queuedRequests.length);
               
               // Process all queued requests
               queuedRequests.forEach(async ({ resolve, reject, request }) => {
@@ -264,11 +254,7 @@ export const useApiStore = create<ApiState>()(
               await new Promise(resolve => setTimeout(resolve, 100));
               
               const newToken = useAuthStore.getState().token;
-              console.log('🔄 API: Retrying original request with new token:', {
-                endpoint,
-                hasNewToken: !!newToken,
-                newToken: newToken?.substring(0, 20) + '...'
-              });
+  
               
               if (newToken) {
                 const retryHeaders = {
@@ -282,32 +268,23 @@ export const useApiStore = create<ApiState>()(
                   headers: retryHeaders,
                 });
                 
-                console.log('🔄 API: Retry response:', {
-                  endpoint,
-                  status: retryResponse.status,
-                  ok: retryResponse.ok
-                });
+  
                 
                 if (retryResponse.ok) {
                   const data = await retryResponse.json();
-                  console.log('✅ API: Retry successful for:', endpoint);
                   return data as T;
                 }
                 
                 // For logout endpoint: if retry fails, it's ok - we'll continue with local logout
                 if (endpoint === '/auth/logout' && !retryResponse.ok) {
-                  console.log('Logout API call failed after token refresh, continuing with local logout');
                   return {} as T; // Return empty success for logout
                 }
               }
             } catch (refreshError) {
-              console.log('❌ API: Token refresh failed:', refreshError);
               // If refresh fails, the auth store will handle logout
-              console.log('Token refresh failed:', refreshError);
               
               // For logout endpoint: if refresh fails, it's ok - continue with local logout
               if (endpoint === '/auth/logout') {
-                console.log('Token refresh failed during logout, continuing with local logout');
                 return {} as T; // Return empty success for logout
               }
             } finally {
@@ -336,7 +313,6 @@ export const useApiStore = create<ApiState>()(
           }
           
           const data = await response.json();
-          console.log("fetchd parse data =>>>>>>>>>>>>>>>", data)
           return data as T;
           
         } catch (error) {

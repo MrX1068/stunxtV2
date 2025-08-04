@@ -17,22 +17,14 @@ export class SpaceAccessGuard implements CanActivate {
   ) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    console.log('🛡️ [SpaceAccessGuard] Guard called');
+   
     
     const request = context.switchToHttp().getRequest();
     const { communityId, id: spaceId } = request.params;
     const userId = request.user?.id;
-    
-    console.log('🛡️ [SpaceAccessGuard] Request details:', {
-      method: request.method,
-      url: request.url,
-      path: request.path,
-      params: { communityId, spaceId },
-      userId
-    });
+ 
 
     if (!userId) {
-      console.error('❌ [SpaceAccessGuard] User not authenticated');
       throw new ForbiddenException('User not authenticated');
     }
 
@@ -42,7 +34,6 @@ export class SpaceAccessGuard implements CanActivate {
       action: 'read' | 'write' | 'delete' | 'moderate';
     }>(SPACE_CONTENT_ACCESS, context.getHandler());
     
-    console.log('🛡️ [SpaceAccessGuard] Access requirement from decorator:', accessRequirement);
 
     // Default to posts/read if no specific requirement
     const contentType = accessRequirement?.contentType || 
@@ -50,7 +41,6 @@ export class SpaceAccessGuard implements CanActivate {
     const action = accessRequirement?.action || 
       this.inferActionFromMethod(request.method) || 'read';
       
-    console.log('🛡️ [SpaceAccessGuard] Determined access:', { contentType, action });
 
     try {
       const accessRequest: SpaceContentAccessRequest = {
@@ -60,18 +50,15 @@ export class SpaceAccessGuard implements CanActivate {
         contentType, // Can be undefined for dynamic detection
         action,
       };
-      
-      console.log('🛡️ [SpaceAccessGuard] Calling security service with:', accessRequest);
 
       const result = await this.spaceSecurityService.validateSpaceContentAccess(accessRequest);
-      console.log('✅ [SpaceAccessGuard] Access validation result:', result);
+    
 
       // Attach access info to request for use in controllers
       request.spaceAccess = result;
 
       return result.allowed;
     } catch (error) {
-      console.error('❌ [SpaceAccessGuard] Access validation failed:', error);
       throw new ForbiddenException(`Space access denied: ${error.message}`);
     }
   }

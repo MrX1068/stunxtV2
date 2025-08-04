@@ -28,16 +28,16 @@ export class SmsService {
       this.fromNumber = this.configService.get('TWILIO_PHONE_NUMBER');
 
       if (!accountSid || !authToken || !this.fromNumber) {
-        this.logger.warn('Twilio credentials not configured, SMS service disabled');
+   
         return;
       }
 
       this.twilioClient = new Twilio(accountSid, authToken);
 
-      this.logger.log('Twilio SMS service initialized');
+
 
     } catch (error) {
-      this.logger.error('Failed to initialize Twilio:', error);
+    
     }
   }
 
@@ -63,7 +63,7 @@ export class SmsService {
         to: formattedNumber,
       });
 
-      this.logger.log(`SMS sent successfully to ${formattedNumber}. Message SID: ${message.sid}`);
+     
 
       return {
         success: true,
@@ -71,7 +71,6 @@ export class SmsService {
       };
 
     } catch (error) {
-      this.logger.error(`Failed to send SMS to ${dto.to}:`, error);
       return {
         success: false,
         error: error.message,
@@ -168,7 +167,6 @@ export class SmsService {
       };
 
     } catch (error) {
-      this.logger.error(`Failed to get message status for ${messageSid}:`, error);
       return {
         status: 'unknown',
         error: error.message,
@@ -219,7 +217,7 @@ export class SmsService {
       };
 
     } catch (error) {
-      this.logger.error('Failed to get Twilio account balance:', error);
+  
       return {
         error: error.message,
       };
@@ -256,7 +254,6 @@ export class SmsService {
       }));
 
     } catch (error) {
-      this.logger.error('Failed to get SMS usage stats:', error);
       return [];
     }
   }

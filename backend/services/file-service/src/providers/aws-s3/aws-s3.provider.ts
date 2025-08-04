@@ -41,7 +41,7 @@ export class AwsS3Provider extends StorageProviderInterface {
     this.bucket = this.configService.get('AWS_S3_BUCKET');
 
     if (!accessKeyId || !secretAccessKey || !this.bucket) {
-      this.logger.warn('AWS S3 credentials not configured properly');
+    
       return;
     }
 
@@ -53,7 +53,7 @@ export class AwsS3Provider extends StorageProviderInterface {
       },
     });
 
-    this.logger.log('AWS S3 provider initialized successfully');
+
   }
 
   async upload(options: UploadOptions): Promise<UploadResult> {
@@ -89,7 +89,7 @@ export class AwsS3Provider extends StorageProviderInterface {
         ? this.generatePublicUrl(key)
         : await this.generateSignedUrl(key, 3600); // 1 hour for private files
 
-      this.logger.log(`File uploaded to S3: ${key}`);
+   
 
       return {
         url,
@@ -105,7 +105,7 @@ export class AwsS3Provider extends StorageProviderInterface {
       };
 
     } catch (error) {
-      this.logger.error('Failed to upload file to S3:', error);
+
       throw new Error(`S3 upload failed: ${error.message}`);
     }
   }
@@ -115,7 +115,7 @@ export class AwsS3Provider extends StorageProviderInterface {
     // This would typically be handled by a separate service like Lambda with Sharp
     // For now, we'll return the original file
     
-    this.logger.warn('S3 provider does not support built-in file processing');
+
     
     try {
       const key = this.extractS3Key(fileUrl);
@@ -132,7 +132,7 @@ export class AwsS3Provider extends StorageProviderInterface {
         },
       };
     } catch (error) {
-      this.logger.error('Failed to process file with S3:', error);
+
       throw new Error(`S3 processing failed: ${error.message}`);
     }
   }
@@ -155,12 +155,11 @@ export class AwsS3Provider extends StorageProviderInterface {
       });
 
       await this.s3Client.send(command);
-      
-      this.logger.log(`File deleted from S3: ${key}`);
+
       return true;
 
     } catch (error) {
-      this.logger.error('Failed to delete file from S3:', error);
+      
       
       if (options.force) {
         return true; // Return true if force delete is enabled
@@ -180,7 +179,6 @@ export class AwsS3Provider extends StorageProviderInterface {
       const result = await this.s3Client.send(command);
       return result;
     } catch (error) {
-      this.logger.error('Failed to get file info from S3:', error);
       throw new Error(`Failed to get file info: ${error.message}`);
     }
   }
@@ -195,7 +193,6 @@ export class AwsS3Provider extends StorageProviderInterface {
       const signedUrl = await getSignedUrl(this.s3Client, command, { expiresIn });
       return signedUrl;
     } catch (error) {
-      this.logger.error('Failed to generate signed URL:', error);
       throw new Error(`Failed to generate signed URL: ${error.message}`);
     }
   }
@@ -278,6 +275,6 @@ export class AwsS3Provider extends StorageProviderInterface {
   async setupLifecyclePolicies(): Promise<void> {
     // This would set up S3 lifecycle policies to automatically move files to cheaper storage classes
     // Implementation would require additional AWS SDK calls
-    this.logger.log('Lifecycle policies setup would be implemented here');
+
   }
 }

@@ -73,8 +73,6 @@ async function bootstrap() {
   const port = configService.get('PORT', 3003);
   await app.listen(port);
 
-  console.log(`🚀 File Service running on: http://localhost:${port}`);
-  console.log(`📚 API Documentation: http://localhost:${port}/api/docs`);
 }
 
 bootstrap().catch((error) => {

@@ -15,11 +15,10 @@ export class WebhookService {
    */
   async handleBrevoWebhook(event: any): Promise<void> {
     try {
-      this.logger.log(`Received Brevo webhook: ${event.event}`);
+      
 
       const messageId = event['message-id'];
       if (!messageId) {
-        this.logger.warn('No message ID in Brevo webhook');
         return;
       }
 
@@ -59,7 +58,7 @@ export class WebhookService {
       await this.updateNotificationByExternalId(messageId, status, metadata);
 
     } catch (error) {
-      this.logger.error('Error processing Brevo webhook:', error);
+
     }
   }
 
@@ -68,7 +67,7 @@ export class WebhookService {
    */
   async handleFCMWebhook(event: any): Promise<void> {
     try {
-      this.logger.log(`Received FCM webhook event`);
+   
 
       // FCM doesn't provide direct delivery webhooks
       // This would be for handling registration token updates
@@ -84,7 +83,6 @@ export class WebhookService {
    */
   async handleTwilioWebhook(event: any): Promise<void> {
     try {
-      this.logger.log(`Received Twilio webhook: ${event.MessageStatus || event.SmsStatus}`);
 
       const messageSid = event.MessageSid || event.SmsSid;
       if (!messageSid) {

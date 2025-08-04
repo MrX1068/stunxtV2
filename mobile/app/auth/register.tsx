@@ -158,7 +158,6 @@ export default function RegisterScreen() {
         }));
       }
     } catch (error) {
-      console.warn(`${field} duplicate check failed:`, error);
       // Don't show confusing error messages to user
       setFieldStatus(prev => ({
         ...prev,
@@ -243,7 +242,6 @@ export default function RegisterScreen() {
       // Navigate to OTP verification with email parameter
       router.replace(`/auth/otp?email=${encodeURIComponent(formData.email)}`);
     } catch (err) {
-      console.log('Registration error:', err);
     }
   };
 

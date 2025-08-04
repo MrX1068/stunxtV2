@@ -60,11 +60,10 @@ class SocketService {
 
   async connect(userId: string): Promise<void> {
     if (this.socket?.connected) {
-      console.log('🔗 Socket already connected, skipping');
       return;
     }
 
-    console.log('🚀 Initiating WebSocket connection...', { userId });
+   
     this.connectionStatus.connecting = true;
     this.currentUserId = userId; // ✅ Store user ID for later use
 
@@ -85,13 +84,7 @@ class SocketService {
       const baseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://192.168.31.7:3000';
       const socketUrl = `${baseUrl}/messaging`;
 
-      console.log('🔧 WebSocket connection config:', {
-        url: socketUrl,
-        hasToken: !!token,
-        tokenLength: token ? token.length : 0,
-        userId,
-        tokenSource: authStore.token ? 'auth_store' : 'secure_store'
-      });
+     
 
       // Connect to the messaging namespace as configured in the backend
       this.socket = io(socketUrl, {
@@ -107,12 +100,10 @@ class SocketService {
         reconnectionDelay: this.reconnectDelay,
       });
 
-      console.log('📡 Socket.IO client created, setting up listeners...');
       this.setupEventListeners();
       this.startHeartbeat();
 
     } catch (error) {
-      console.error('Socket connection error:', error);
       this.connectionStatus.connecting = false;
       this.connectionStatus.error = error instanceof Error ? error.message : 'Connection failed';
     }
@@ -123,7 +114,7 @@ class SocketService {
 
     this.socket.on('connect', () => {
       const baseUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3000';
-      console.log('🔗 WebSocket connected successfully');
+ 
       this.connectionStatus.connected = true;
       this.connectionStatus.connecting = false;
       this.connectionStatus.error = undefined;
@@ -134,7 +125,7 @@ class SocketService {
     });
 
     this.socket.on('connection_success', (data: { userId: string; socketId: string; connectionTime: number; timestamp: string }) => {
-      console.log('✅ Connection success event received:', data);
+     
       this.connectionStatus.connected = true;
       this.connectionStatus.connecting = false;
       this.connectionStatus.error = undefined;
@@ -143,7 +134,7 @@ class SocketService {
     });
 
     this.socket.on('connection_error', (data: { error: string; connectionTime: number }) => {
-      console.error('❌ Connection error event received:', data);
+   
       this.connectionStatus.connected = false;
       this.connectionStatus.connecting = false;
       this.connectionStatus.error = data.error;
@@ -151,26 +142,25 @@ class SocketService {
     });
 
     this.socket.on('disconnect', (reason: string) => {
-      console.log('❌ WebSocket disconnected:', reason);
+  
       this.connectionStatus.connected = false;
       this.connectionStatus.connecting = false;
       this.handleDisconnect(reason); // Use callback
       
       if (reason === 'io server disconnect') {
-        console.log('🔄 Server initiated disconnect, scheduling reconnect...');
+        
         this.scheduleReconnect();
       }
     });
 
     this.socket.on('connect_error', (error: any) => {
-      console.error('🚫 WebSocket connection error:', error.message);
+     
       this.connectionStatus.connecting = false;
       this.connectionStatus.error = error.message;
       this.connectionStatus.reconnectAttempts++;
       this.handleConnectError(error); // Use callback
       
       if (error.message?.includes('unauthorized')) {
-        console.error('❌ Auth error, stopping reconnection.');
         this.connectionStatus.reconnectAttempts = this.maxReconnectAttempts;
         return;
       }
@@ -178,12 +168,12 @@ class SocketService {
       if (this.connectionStatus.reconnectAttempts < this.maxReconnectAttempts) {
         this.scheduleReconnect();
       } else {
-        console.error('❌ Max reconnect attempts reached.');
+        
       }
     });
 
     this.socket.on('error', (error: any) => {
-      console.error('Socket error:', error);
+   
       this.connectionStatus.error = error.message || 'Socket error';
     });
 
@@ -193,17 +183,14 @@ class SocketService {
     });
 
     this.socket.on('new_message', (data: { message: any; conversationId: string }) => {
-      console.log('📨 Received new_message event:', data);
       this.handleIncomingMessage(data.message);
     });
 
     this.socket.on('message_sent', (data: { optimisticId: string; message: any; success: boolean }) => {
-      console.log('✅ Message sent confirmation:', data);
       this.handleMessageSentConfirmation(data);
     });
 
     this.socket.on('message_error', (data: { optimisticId: string; error: string; success: boolean }) => {
-      console.log('❌ Message send error:', data);
       this.handleMessageSendError(data);
     });
 
@@ -245,7 +232,6 @@ class SocketService {
     
     this.reconnectTimeout = setTimeout(() => {
       if (!this.socket?.connected && this.connectionStatus.reconnectAttempts < this.maxReconnectAttempts) {
-        console.log(`Attempting to reconnect (${this.connectionStatus.reconnectAttempts + 1}/${this.maxReconnectAttempts})`);
         this.socket?.connect();
       }
     }, delay);
@@ -272,23 +258,17 @@ class SocketService {
       attachments: [], // TODO: Add attachments support
     };
 
-    console.log('📤 [SocketService] Sending message via WebSocket:', {
-      ...messageData,
-      content: messageData.content.substring(0, 100),
-      timestamp: new Date().toISOString(),
-      connected: this.socket?.connected
-    });
 
     if (this.socket?.connected) {
-      console.log('🌐 [SocketService] Socket connected, emitting send_message event');
+      
       this.socket.emit('send_message', messageData);
     } else {
-      console.log('⚠️ [SocketService] Socket not connected, queuing message');
+    
       // Queue message for when connection is restored
       this.messageQueue.push(messageData);
     }
 
-    console.log('✅ [SocketService] Message queued/sent, returning optimisticId:', optimisticId);
+    
     return optimisticId;
   }
 

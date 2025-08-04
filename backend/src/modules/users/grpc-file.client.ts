@@ -65,9 +65,9 @@ export class GrpcFileClient implements OnModuleInit {
         grpc.credentials.createInsecure()
       );
 
-      this.logger.log(`gRPC File Client connected to ${fileServiceUrl}`);
+   
     } catch (error) {
-      this.logger.error('Failed to initialize gRPC client:', error);
+   
       throw error;
     }
   }
@@ -89,7 +89,7 @@ export class GrpcFileClient implements OnModuleInit {
         return;
       }
 
-      this.logger.log(`gRPC Upload: ${originalName} (${fileBuffer.length} bytes) for user: ${userId}`);
+    
 
       const request = {
         file_data: fileBuffer,
@@ -106,13 +106,13 @@ export class GrpcFileClient implements OnModuleInit {
 
       this.client.uploadFile(request, { deadline }, (error: any, response: any) => {
         if (error) {
-          this.logger.error('gRPC Upload failed:', error);
+     
           reject(new Error(`gRPC Upload failed: ${error.message}`));
           return;
         }
 
         if (!response.success) {
-          this.logger.error('gRPC Upload unsuccessful:', response.message);
+      
           reject(new Error(response.message || 'Upload failed'));
           return;
         }
@@ -127,7 +127,7 @@ export class GrpcFileClient implements OnModuleInit {
           privacy: response.file_info.privacy as 'public' | 'private',
         };
 
-        this.logger.log(`gRPC Upload successful: ${result.filename}`);
+
         resolve(result);
       });
     });
@@ -143,7 +143,7 @@ export class GrpcFileClient implements OnModuleInit {
         return;
       }
 
-      this.logger.log(`gRPC Delete: ${fileId} for user: ${userId}`);
+     
 
       const request = {
         file_id: fileId,
@@ -152,18 +152,18 @@ export class GrpcFileClient implements OnModuleInit {
 
       this.client.deleteFile(request, (error: any, response: any) => {
         if (error) {
-          this.logger.error('gRPC Delete failed:', error);
+     
           reject(new Error(`gRPC Delete failed: ${error.message}`));
           return;
         }
 
         if (!response.success) {
-          this.logger.error('gRPC Delete unsuccessful:', response.message);
+
           reject(new Error(response.message || 'Delete failed'));
           return;
         }
 
-        this.logger.log(`gRPC Delete successful: ${fileId}`);
+
         resolve();
       });
     });
@@ -179,7 +179,7 @@ export class GrpcFileClient implements OnModuleInit {
         return;
       }
 
-      this.logger.log(`gRPC GetFileInfo: ${fileId} for user: ${userId}`);
+   
 
       const request = {
         file_id: fileId,
@@ -188,18 +188,18 @@ export class GrpcFileClient implements OnModuleInit {
 
       this.client.getFileInfo(request, (error: any, response: any) => {
         if (error) {
-          this.logger.error('gRPC GetFileInfo failed:', error);
+   
           reject(new Error(`gRPC GetFileInfo failed: ${error.message}`));
           return;
         }
 
         if (!response.success) {
-          this.logger.error('gRPC GetFileInfo unsuccessful:', response.message);
+     
           reject(new Error(response.message || 'Get file info failed'));
           return;
         }
 
-        this.logger.log(`gRPC GetFileInfo successful: ${fileId}`);
+
         resolve(response.file_info);
       });
     });

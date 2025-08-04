@@ -63,11 +63,10 @@ export class NotificationService {
       // Add to queue for processing
       await this.addToQueue(savedNotification);
 
-      this.logger.log(`Notification queued: ${savedNotification.id}`);
+
       return savedNotification;
 
     } catch (error) {
-      this.logger.error('Failed to send notification:', error);
       throw error;
     }
   }
@@ -116,7 +115,7 @@ export class NotificationService {
         const notification = await this.sendNotification(notificationDto);
         results.push(notification);
       } catch (error) {
-        this.logger.error(`Failed to send bulk notification:`, error);
+ 
         // Continue with other notifications
       }
     }
@@ -177,8 +176,7 @@ export class NotificationService {
     }
 
     await this.notificationRepository.update(notificationId, updateData);
-    
-    this.logger.log(`Notification ${notificationId} status updated to ${status}`);
+
   }
 
   /**
@@ -260,7 +258,6 @@ export class NotificationService {
       .where('createdAt < :cutoffDate', { cutoffDate })
       .execute();
 
-    this.logger.log(`Cleaned up ${result.affected} old notifications`);
   }
 
   /**

@@ -71,7 +71,6 @@ export default function SettingsScreen() {
       await logout();
       router.replace('/auth/login');
     } catch (error) {
-      console.error('Logout error:', error);
     }
   };
 

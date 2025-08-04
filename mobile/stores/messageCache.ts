@@ -61,7 +61,6 @@ class MessageCacheManager {
     try {
       await SecureStore.setItemAsync(key, value);
     } catch (error) {
-      console.error('SecureStore setItem error:', error);
       throw error;
     }
   }
@@ -70,7 +69,6 @@ class MessageCacheManager {
     try {
       return await SecureStore.getItemAsync(key);
     } catch (error) {
-      console.error('SecureStore getItem error:', error);
       return null;
     }
   }
@@ -79,7 +77,6 @@ class MessageCacheManager {
     try {
       await SecureStore.deleteItemAsync(key);
     } catch (error) {
-      console.error('SecureStore removeItem error:', error);
       throw error;
     }
   }
@@ -103,10 +100,7 @@ class MessageCacheManager {
       // Check memory cache first
       const memoryCached = this.memoryCache.get(conversationId);
       if (memoryCached && this.isMemoryCacheValid(memoryCached)) {
-        console.log('📱 MessageCache: Serving from memory cache:', {
-          conversationId,
-          messageCount: memoryCached.messages.length
-        });
+       
         return memoryCached.messages;
       }
 
@@ -115,7 +109,6 @@ class MessageCacheManager {
       const cachedData = await this.getSecureItem(cacheKey);
       
       if (!cachedData) {
-        console.log('💾 MessageCache: No cached data found for conversation:', conversationId);
         return [];
       }
 
@@ -123,7 +116,6 @@ class MessageCacheManager {
       
       // Validate cache entry
       if (!this.isCacheEntryValid(parsedData)) {
-        console.log('⚠️ MessageCache: Invalid cache entry, clearing:', conversationId);
         await this.removeSecureItem(cacheKey);
         return [];
       }
@@ -131,18 +123,11 @@ class MessageCacheManager {
       // Update memory cache
       this.updateMemoryCache(conversationId, parsedData);
 
-      console.log('✅ MessageCache: Loaded messages from cache:', {
-        conversationId,
-        messageCount: parsedData.messages.length,
-        lastUpdated: new Date(parsedData.lastUpdated).toISOString()
-      });
+     
 
       return parsedData.messages;
     } catch (error) {
-      console.error('❌ MessageCache: Error loading messages:', {
-        conversationId,
-        error: error instanceof Error ? error.message : String(error)
-      });
+    
       return [];
     }
   }
@@ -171,16 +156,9 @@ class MessageCacheManager {
       // Update metadata
       await this.updateCacheMetadata();
 
-      console.log('💾 MessageCache: Cached messages:', {
-        conversationId,
-        messageCount: limitedMessages.length,
-        timestamp: new Date().toISOString()
-      });
+     
     } catch (error) {
-      console.error('❌ MessageCache: Error caching messages:', {
-        conversationId,
-        error: error instanceof Error ? error.message : String(error)
-      });
+    
     }
   }
 
@@ -221,18 +199,8 @@ class MessageCacheManager {
       
       // Cache the merged result
       await this.setConversationMessages(conversationId, mergedMessages);
-      
-      console.log('🔄 MessageCache: Smart merge completed:', {
-        conversationId,
-        existingCount: existingMessages.length,
-        incomingCount: incomingMessages.length,
-        finalCount: mergedMessages.length
-      });
     } catch (error) {
-      console.error('❌ MessageCache: Error merging messages:', {
-        conversationId,
-        error: error instanceof Error ? error.message : String(error)
-      });
+     
     }
   }
 
@@ -252,18 +220,9 @@ class MessageCacheManager {
       if (!messageExists) {
         const updatedMessages = [...existingMessages, message];
         await this.setConversationMessages(conversationId, updatedMessages);
-        
-        console.log('➕ MessageCache: Added new message to cache:', {
-          conversationId,
-          messageId: message.id || message.optimisticId,
-          totalMessages: updatedMessages.length
-        });
       }
     } catch (error) {
-      console.error('❌ MessageCache: Error adding message:', {
-        conversationId,
-        error: error instanceof Error ? error.message : String(error)
-      });
+     
     }
   }
 
@@ -287,16 +246,10 @@ class MessageCacheManager {
 
       if (messageUpdated) {
         await this.setConversationMessages(conversationId, updatedMessages);
-        console.log('🔄 MessageCache: Updated message in cache:', {
-          conversationId,
-          messageId: updatedMessage.id || updatedMessage.optimisticId
-        });
+      
       }
     } catch (error) {
-      console.error('❌ MessageCache: Error updating message:', {
-        conversationId,
-        error: error instanceof Error ? error.message : String(error)
-      });
+     
     }
   }
 
@@ -309,12 +262,8 @@ class MessageCacheManager {
       await this.removeSecureItem(cacheKey);
       this.memoryCache.delete(conversationId);
       
-      console.log('🧹 MessageCache: Cleared conversation cache:', conversationId);
     } catch (error) {
-      console.error('❌ MessageCache: Error clearing conversation cache:', {
-        conversationId,
-        error: error instanceof Error ? error.message : String(error)
-      });
+     
     }
   }
 
@@ -339,9 +288,7 @@ class MessageCacheManager {
       await Promise.all(promises);
       this.memoryCache.clear();
 
-      console.log('🧹 MessageCache: Cleared all cache data');
     } catch (error) {
-      console.error('❌ MessageCache: Error clearing all cache:', error);
     }
   }
 
@@ -395,7 +342,6 @@ class MessageCacheManager {
       }
       return JSON.parse(metadataStr);
     } catch (error) {
-      console.warn('MessageCache: Error reading metadata, using defaults:', error);
       return {
         lastCleanup: Date.now(),
         totalConversations: 0,
@@ -415,7 +361,6 @@ class MessageCacheManager {
       
       await this.setSecureItem(this.getMetadataKey(), JSON.stringify(updatedMetadata));
     } catch (error) {
-      console.warn('MessageCache: Error updating metadata:', error);
     }
   }
 
@@ -431,15 +376,12 @@ class MessageCacheManager {
         return; // Cleanup not needed yet
       }
 
-      console.log('🧹 MessageCache: Starting periodic cleanup...');
       
       // Update cleanup timestamp
       metadata.lastCleanup = Date.now();
       await this.setSecureItem(this.getMetadataKey(), JSON.stringify(metadata));
       
-      console.log('✅ MessageCache: Cleanup completed');
     } catch (error) {
-      console.error('❌ MessageCache: Cleanup error:', error);
     }
   }
 

@@ -107,7 +107,6 @@ export class UserSessionService {
 
     const savedSession = await this.sessionRepository.save(session);
 
-    this.logger.log(`Session created for user ${user.id}: ${savedSession.id}`);
     return savedSession;
   }
 
@@ -123,13 +122,11 @@ export class UserSessionService {
       });
 
       if (!session) {
-        this.logger.warn(`Valid session not found: ${sessionId} for user ${userId}`);
         return null;
       }
 
       return session;
     } catch (error) {
-      this.logger.error(`Error finding session ${sessionId}:`, error);
       return null;
     }
   }
@@ -151,9 +148,7 @@ export class UserSessionService {
 
       await this.sessionRepository.update(sessionId, updateData);
       
-      this.logger.debug(`Session activity updated: ${sessionId}`);
     } catch (error) {
-      this.logger.error(`Failed to update session activity ${sessionId}:`, error);
       throw error;
     }
   }
@@ -175,13 +170,11 @@ export class UserSessionService {
       // Verify token hash
       const isValid = await argon2.verify(session.tokenHash, sessionToken);
       if (!isValid) {
-        this.logger.warn(`Invalid session token for session: ${sessionId}`);
         return null;
       }
 
       return session;
     } catch (error) {
-      this.logger.error(`Error validating session token for ${sessionId}:`, error);
       return null;
     }
   }
@@ -215,7 +208,6 @@ export class UserSessionService {
         // Exclude sensitive fields: tokenHash, refreshTokenHash, userAgent, metadata
       }));
     } catch (error) {
-      this.logger.error(`Error getting sanitized sessions for user ${userId}:`, error);
       return [];
     }
   }
@@ -233,7 +225,6 @@ export class UserSessionService {
         },
       });
     } catch (error) {
-      this.logger.error(`Error getting active sessions for user ${userId}:`, error);
       return [];
     }
   }
@@ -248,9 +239,7 @@ export class UserSessionService {
         updatedAt: new Date(),
       });
       
-      this.logger.log(`Session invalidated: ${sessionId}`);
     } catch (error) {
-      this.logger.error(`Failed to invalidate session ${sessionId}:`, error);
       throw error;
     }
   }
@@ -271,9 +260,7 @@ export class UserSessionService {
         }
       );
       
-      this.logger.log(`All sessions invalidated for user: ${userId}`);
     } catch (error) {
-      this.logger.error(`Failed to invalidate sessions for user ${userId}:`, error);
       throw error;
     }
   }
@@ -295,9 +282,7 @@ export class UserSessionService {
         .andWhere('status = :status', { status: SessionStatus.ACTIVE })
         .execute();
       
-      this.logger.log(`All other sessions invalidated for user: ${userId}`);
     } catch (error) {
-      this.logger.error(`Failed to invalidate other sessions for user ${userId}:`, error);
       throw error;
     }
   }
@@ -308,7 +293,6 @@ export class UserSessionService {
         where: { id: sessionId },
       });
     } catch (error) {
-      this.logger.error(`Error getting session ${sessionId}:`, error);
       return null;
     }
   }
@@ -320,7 +304,6 @@ export class UserSessionService {
         order: { createdAt: 'DESC' },
       });
     } catch (error) {
-      this.logger.error(`Error getting all sessions for user ${userId}:`, error);
       return [];
     }
   }
@@ -338,10 +321,8 @@ export class UserSessionService {
         }
       );
 
-      this.logger.log(`Cleaned up ${result.affected} expired sessions`);
       return result.affected || 0;
     } catch (error) {
-      this.logger.error('Error cleaning up expired sessions:', error);
       return 0;
     }
   }
@@ -451,9 +432,7 @@ export class UserSessionService {
   ): Promise<void> {
     try {
       await this.sessionRepository.update(sessionId, refreshTokenData);
-      this.logger.debug(`Refresh token updated for session: ${sessionId}`);
     } catch (error) {
-      this.logger.error(`Failed to update refresh token for session ${sessionId}:`, error);
       throw error;
     }
   }
@@ -471,7 +450,6 @@ export class UserSessionService {
         select: ['id', 'userId', 'refreshTokenHash', 'refreshTokenExpiresAt', 'status'],
       });
     } catch (error) {
-      this.logger.error('Failed to get sessions with refresh tokens:', error);
       throw error;
     }
   }
@@ -486,9 +464,7 @@ export class UserSessionService {
         refreshTokenExpiresAt: null,
         status: SessionStatus.EXPIRED,
       });
-      this.logger.debug(`Refresh token cleared for session: ${sessionId}`);
     } catch (error) {
-      this.logger.error(`Failed to clear refresh token for session ${sessionId}:`, error);
       throw error;
     }
   }

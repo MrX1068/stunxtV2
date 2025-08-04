@@ -66,39 +66,25 @@ export class MessageService {
   ): Promise<SendMessageResponse> {
     const startTime = Date.now();
     
-    console.log('💾 [MessageService] sendMessage called:', {
-      userId,
-      conversationId: createMessageDto.conversationId,
-      content: createMessageDto.content?.substring(0, 100),
-      type: createMessageDto.type,
-      optimisticId,
-      timestamp: new Date().toISOString()
-    });
+ 
     
     try {
       // 1. IMMEDIATE VALIDATION & CACHE CHECK
-      console.log('🔍 [MessageService] Starting validation and cache checks...');
       const [sender, conversation, participant] = await Promise.all([
         this.getUserFromCache(userId),
         this.getConversationFromCache(createMessageDto.conversationId),
         this.getParticipantFromCache(createMessageDto.conversationId, userId)
       ]);
 
-      console.log('✅ [MessageService] Cache lookups completed:', {
-        hasSender: !!sender,
-        hasConversation: !!conversation,
-        hasParticipant: !!participant,
-        conversationType: conversation?.type,
-        conversationId: createMessageDto.conversationId
-      });
+    
 
       // 2. PERMISSION VALIDATION (Fast)
-      console.log('🔐 [MessageService] Validating permissions...');
+    
       this.validateMessagePermissions(participant, createMessageDto.type);
-      console.log('✅ [MessageService] Permissions validated');
+    
 
       // 3. CREATE OPTIMISTIC MESSAGE (Immediate Response)
-      console.log('⚡ [MessageService] Creating optimistic message...');
+   
       const optimisticMessage = this.createOptimisticMessage(
         sender,
         conversation,
@@ -106,15 +92,9 @@ export class MessageService {
         optimisticId
       );
 
-      console.log('✅ [MessageService] Optimistic message created:', {
-        messageId: optimisticMessage.id,
-        conversationId: optimisticMessage.conversationId,
-        senderId: optimisticMessage.senderId,
-        content: optimisticMessage.content?.substring(0, 50)
-      });
-
+    
       // 4. ASYNC DATABASE OPERATIONS (Background)
-      console.log('💾 [MessageService] Starting background DB operations...');
+    
       const dbOperationPromise = this.processMessageInBackground(
         optimisticMessage,
         createMessageDto,
@@ -132,40 +112,29 @@ export class MessageService {
       });
 
       // 5. IMMEDIATE RESPONSE WITH OPTIMISTIC DATA
-      console.log('👥 [MessageService] Fetching participants and unread counts...');
+     
       const participants = await this.getConversationParticipants(createMessageDto.conversationId);
       const unreadCounts = await this.calculateUnreadCounts(createMessageDto.conversationId, userId);
 
-      console.log('📊 [MessageService] Response data prepared:', {
-        participantCount: participants?.length,
-        hasUnreadCounts: !!unreadCounts,
-        processingTime: Date.now() - startTime
-      });
+     
 
       // 6. EMIT REAL-TIME EVENTS (Non-blocking)
-      console.log('📢 [MessageService] Emitting real-time events...');
+    
       this.emitOptimisticMessageEvents(optimisticMessage, participants);
 
       // 7. LOG PERFORMANCE
       const processingTime = Date.now() - startTime;
-      this.logger.log(`Optimistic message sent in ${processingTime}ms`);
-      console.log(`⚡ [MessageService] Total processing time: ${processingTime}ms`);
+  
+  
 
       // 8. HANDLE BACKGROUND COMPLETION
       dbOperationPromise
         .then(async (persistedMessage) => {
-          console.log('✅ [MessageService] Message persisted to DB:', {
-            messageId: persistedMessage?.id,
-            originalOptimisticId: optimisticMessage.id
-          });
+      
           await this.handleMessagePersisted(optimisticMessage, persistedMessage, participants);
         })
         .catch(async (error) => {
-          console.error('❌ [MessageService] DB persistence failed:', {
-            error: error.message,
-            messageId: optimisticMessage.id,
-            conversationId: createMessageDto.conversationId
-          });
+    
           await this.handleMessageFailed(optimisticMessage, error, participants);
         });
 
@@ -176,25 +145,12 @@ export class MessageService {
         unreadCounts,
       };
 
-      console.log('🎯 [MessageService] Returning response:', {
-        messageId: response.message.id,
-        participantCount: response.participants?.length,
-        hasUnreadCounts: !!response.unreadCounts,
-        processingTime
-      });
+     
 
       return response;
 
     } catch (error) {
-      console.error('❌ [MessageService] sendMessage failed:', {
-        error: error.message,
-        stack: error.stack,
-        userId,
-        conversationId: createMessageDto.conversationId,
-        timestamp: new Date().toISOString()
-      });
-      
-      this.logger.error(`Message send failed: ${getErrorMessage(error)}`, getErrorStack(error));
+
       throw error;
     }
   }
@@ -315,7 +271,7 @@ export class MessageService {
     await queryRunner.startTransaction();
 
     try {
-      console.log('🏗️ [MessageService] Creating persistent message entity...');
+     
       
       // 1. Handle space conversations - ensure conversation exists in DB (optimized)
       const isSpaceMessage = dto.conversationId.startsWith('space-');
@@ -326,7 +282,7 @@ export class MessageService {
       // Parallel execution for space conversation handling
       let spaceConversationPromise: Promise<void> | null = null;
       if (isSpaceMessage) {
-        console.log('🏢 [MessageService] Space message detected, ensuring conversation exists in DB...');
+     
         spaceConversationPromise = this.ensureSpaceConversationExists(queryRunner, actualConversationId, dto.conversationId);
       }
       
@@ -341,11 +297,7 @@ export class MessageService {
         optimisticId: optimisticMessage.id // Store optimistic ID for tracking
       };
 
-      console.log('🔧 [MessageService] Conversation ID conversion:', {
-        original: dto.conversationId,
-        converted: actualConversationId,
-        isSpaceMessage
-      });
+    
 
       // Wait for space conversation creation if needed
       if (spaceConversationPromise) {
@@ -368,39 +320,28 @@ export class MessageService {
         isOptimistic: false,
       });
 
-      console.log('📊 [MessageService] Message entity created, saving to DB...', {
-        messageId: message.id,
-        conversationId: message.conversationId,
-        originalConversationId: dto.conversationId,
-        isSpaceMessage
-      });
+  
 
       // 3. Save message to database with optimized query
       const saveStartTime = Date.now();
       const savedMessage = await queryRunner.manager.save(Message, message);
       const saveTime = Date.now() - saveStartTime;
       
-      console.log('✅ [MessageService] Message saved to DB:', {
-        messageId: savedMessage.id,
-        conversationId: savedMessage.conversationId,
-        saveTime: `${saveTime}ms`,
-        createdAt: savedMessage.createdAt,
-        isSpaceMessage: dto.conversationId.startsWith('space-')
-      });
+  
 
       // 4. Batch update operations for better performance
       const updatePromises: Promise<any>[] = [];
       
       // Update conversation activity (skip for virtual space conversations)
       if (!dto.conversationId.startsWith('space-')) {
-        console.log('🔄 [MessageService] Scheduling conversation activity update...');
+     
         updatePromises.push(this.updateConversationActivity(queryRunner, conversation.id, savedMessage.id));
         
         // Update participant read status (skip for virtual space participants)
-        console.log('👥 [MessageService] Scheduling participant unread counts update...');
+      
         updatePromises.push(this.updateParticipantUnreadCounts(queryRunner, conversation.id, optimisticMessage.senderId));
       } else {
-        console.log('⏭️ [MessageService] Skipping conversation and participant updates for space conversation');
+      
       }
 
       // Execute all updates in parallel
@@ -411,39 +352,24 @@ export class MessageService {
       // 5. Commit transaction first, then do cache updates
       await queryRunner.commitTransaction();
       const dbTime = Date.now() - dbStartTime;
-      console.log('✅ [MessageService] Transaction committed successfully:', {
-        dbProcessingTime: `${dbTime}ms`,
-        messageId: savedMessage.id
-      });
+  
 
       // 6. Cache updates (after commit for consistency)
-      console.log('💾 [MessageService] Updating message cache...');
+    
       // Don't await cache update - do it in background
       this.updateMessageCache(savedMessage).catch(error => {
-        console.error('❌ Cache update failed:', error.message);
+       
       });
 
-      this.logger.log(`Message persisted: ${savedMessage.id} in ${dbTime}ms`);
-      console.log('🎯 [MessageService] Background DB processing completed:', {
-        messageId: savedMessage.id,
-        totalProcessingTime: `${dbTime}ms`,
-        saveTime: `${saveTime}ms`
-      });
+   
       
       return savedMessage;
 
     } catch (error) {
       const dbTime = Date.now() - dbStartTime;
-      console.error('❌ [MessageService] Background DB processing failed:', {
-        error: error.message,
-        stack: error.stack,
-        optimisticMessageId: optimisticMessage.id,
-        conversationId: dto.conversationId,
-        processingTime: `${dbTime}ms`
-      });
+    
       
       await queryRunner.rollbackTransaction();
-      this.logger.error(`Background message processing failed: ${getErrorMessage(error)}`, getErrorStack(error));
       throw error;
     } finally {
       await queryRunner.release();
@@ -481,7 +407,7 @@ export class MessageService {
     error: any,
     participants: ConversationParticipant[]
   ): Promise<void> {
-    this.logger.error(`Message persistence failed: ${error.message}`);
+
 
     // Emit message failed event
     this.eventEmitter.emit('message.failed', {
@@ -535,14 +461,7 @@ export class MessageService {
   }> {
     const queryStartTime = Date.now();
     const cacheKey = `messages:${conversationId}:${limit}:${before || 'null'}:${after || 'null'}`;
-    
-    console.log('🔍 [MessageService] Getting messages with optimized caching:', {
-      conversationId: conversationId,
-      userId,
-      limit,
-      before,
-      after
-    });
+
     
     // Try cache first with extended logging
     const cacheStartTime = Date.now();
@@ -550,19 +469,10 @@ export class MessageService {
     const cacheTime = Date.now() - cacheStartTime;
     
     if (cached) {
-      console.log('⚡ [MessageService] Cache hit - returning cached messages:', {
-        messageCount: cached.messages?.length,
-        totalCount: cached.totalCount,
-        cacheTime: `${cacheTime}ms`,
-        conversationId
-      });
+    
       return cached;
     }
 
-    console.log('💾 [MessageService] Cache miss - querying database:', {
-      cacheTime: `${cacheTime}ms`,
-      conversationId
-    });
 
     // Verify participant access with caching
     const participantStartTime = Date.now();
@@ -578,13 +488,7 @@ export class MessageService {
       conversationId.replace('space-', '') : 
       conversationId;
 
-    console.log('🔍 [MessageService] Database query preparation:', {
-      requestedConversationId: conversationId,
-      dbConversationId,
-      isSpaceConversation,
-      participantCheckTime: `${participantTime}ms`
-    });
-
+  
     // Build optimized query with proper indexing hints
     const dbQueryStartTime = Date.now();
     const queryBuilder = this.messageRepository
@@ -634,19 +538,7 @@ export class MessageService {
     const countTime = Date.now() - countQueryStartTime;
 
     const totalQueryTime = Date.now() - queryStartTime;
-    console.log('✅ [MessageService] Messages retrieved with performance metrics:', {
-      messageCount: messages.length,
-      totalCount,
-      hasMore,
-      conversationId: conversationId,
-      performanceMetrics: {
-        totalTime: `${totalQueryTime}ms`,
-        cacheTime: `${cacheTime}ms`,
-        participantTime: `${participantTime}ms`,
-        dbQueryTime: `${dbQueryTime}ms`,
-        countTime: `${countTime}ms`
-      }
-    });
+ 
 
     const result = {
       messages: messages.reverse(), // Reverse to get chronological order
@@ -665,10 +557,7 @@ export class MessageService {
     // Cache the result
     await this.cacheManager.set(cacheKey, result, cacheTTL);
     
-    console.log('💾 [MessageService] Result cached with adaptive TTL:', {
-      cacheTTL: `${cacheTTL}ms`,
-      cacheHits: cacheStats.hits + 1
-    });
+  
 
     return result;
   }
@@ -711,7 +600,6 @@ export class MessageService {
       };
 
     } catch (error) {
-      this.logger.error(`Mark as read failed: ${getErrorMessage(error)}`, getErrorStack(error));
       throw error;
     }
   }
@@ -793,13 +681,13 @@ export class MessageService {
   }
 
   private async getConversationFromCache(conversationId: string): Promise<Conversation> {
-    console.log('🔍 [MessageService] Getting conversation from cache:', conversationId);
+   
     
     // Handle space conversations differently
     const isSpaceConversation = conversationId.startsWith('space-');
     
     if (isSpaceConversation) {
-      console.log('🏢 [MessageService] Detected space conversation:', conversationId);
+    
       // For space conversations, we'll create a virtual conversation or handle differently
       return await this.handleSpaceConversation(conversationId);
     }
@@ -807,32 +695,24 @@ export class MessageService {
     const cacheKey = `conversation:${conversationId}`;
     let conversation = await this.cacheManager.get<Conversation>(cacheKey);
     
-    console.log('💾 [MessageService] Cache lookup result:', {
-      conversationId,
-      foundInCache: !!conversation,
-      cacheKey
-    });
+
     
     if (!conversation) {
-      console.log('🔍 [MessageService] Not in cache, fetching from DB...');
+    
       conversation = await this.conversationRepository.findOne({
         where: { id: conversationId },
       });
       
       if (!conversation) {
-        console.error('❌ [MessageService] Conversation not found in DB:', conversationId);
+        
         throw new NotFoundException(`Conversation not found: ${conversationId}`);
       }
       
-      console.log('✅ [MessageService] Found in DB, caching...');
+    
       await this.cacheManager.set(cacheKey, conversation, 300000); // 5 minutes
     }
     
-    console.log('✅ [MessageService] Returning conversation:', {
-      id: conversation.id,
-      type: conversation.type,
-      name: conversation.name
-    });
+ 
     
     return conversation;
   }
@@ -841,23 +721,22 @@ export class MessageService {
    * Handle space conversations by creating virtual conversations or linking to space
    */
   private async handleSpaceConversation(conversationId: string): Promise<Conversation> {
-    console.log('🏢 [MessageService] Handling space conversation:', conversationId);
+   
     
     // Extract space ID from conversation ID (format: space-{spaceId})
     const spaceId = conversationId.replace('space-', '');
-    console.log('🆔 [MessageService] Extracted space ID:', spaceId);
+   
     
     // Check if virtual conversation already exists in cache
     const cacheKey = `conversation:${conversationId}`;
     let conversation = await this.cacheManager.get<Conversation>(cacheKey);
     
     if (conversation) {
-      console.log('✅ [MessageService] Found cached space conversation');
       return conversation;
     }
     
     // For space conversations, don't check database - always create virtual conversation
-    console.log('📦 [MessageService] Creating virtual space conversation (skipping DB check)');
+   
     // Create a virtual conversation object for space chat
     conversation = {
       id: conversationId,
@@ -871,18 +750,13 @@ export class MessageService {
     
     // Cache the virtual conversation
     await this.cacheManager.set(cacheKey, conversation, 300000); // 5 minutes
-    
-    console.log('✅ [MessageService] Space conversation ready:', {
-      id: conversation.id,
-      spaceId,
-      type: conversation.type
-    });
+ 
     
     return conversation;
   }
 
   private async getParticipantFromCache(conversationId: string, userId: string): Promise<ConversationParticipant> {
-    console.log('👤 [MessageService] Getting participant from cache:', { conversationId, userId });
+  
     
     const cacheKey = `participant:${conversationId}:${userId}`;
     
@@ -890,18 +764,12 @@ export class MessageService {
     const isSpaceConversation = conversationId.startsWith('space-');
     
     if (isSpaceConversation) {
-      console.log('🏢 [MessageService] Handling space participant:', conversationId);
       return await this.handleSpaceParticipant(conversationId, userId);
     }
     
     // Try to get from cache first
     const cachedData = await this.cacheManager.get<any>(cacheKey);
-    
-    console.log('💾 [MessageService] Participant cache lookup:', {
-      cacheKey,
-      foundInCache: !!cachedData
-    });
-    
+  
     if (cachedData) {
       // Recreate entity instance from cached data to restore methods
       const participant = Object.assign(new ConversationParticipant(), cachedData);
@@ -942,14 +810,13 @@ export class MessageService {
    * Handle space participants by creating virtual participants for space members
    */
   private async handleSpaceParticipant(conversationId: string, userId: string): Promise<ConversationParticipant> {
-    console.log('🏢 [MessageService] Handling space participant:', { conversationId, userId });
+   
     
     const cacheKey = `participant:${conversationId}:${userId}`;
     
     // Try cache first
     const cachedData = await this.cacheManager.get<any>(cacheKey);
     if (cachedData) {
-      console.log('✅ [MessageService] Found cached space participant');
       return Object.assign(new ConversationParticipant(), cachedData);
     }
     
@@ -990,11 +857,7 @@ export class MessageService {
     
     await this.cacheManager.set(cacheKey, cacheData, 60000); // 1 minute
     
-    console.log('✅ [MessageService] Created virtual space participant:', {
-      participantId: participant.id,
-      spaceId,
-      userId
-    });
+ 
     
     return participant;
   }
@@ -1035,13 +898,12 @@ export class MessageService {
   }
 
   private async getConversationParticipants(conversationId: string): Promise<ConversationParticipant[]> {
-    console.log('👥 [MessageService] Getting conversation participants:', conversationId);
+ 
     
     const cacheKey = `participants:${conversationId}`;
     let participants = await this.cacheManager.get<ConversationParticipant[]>(cacheKey);
     
     if (participants) {
-      console.log('✅ [MessageService] Found cached participants:', participants.length);
       return participants;
     }
     
@@ -1049,31 +911,30 @@ export class MessageService {
     const isSpaceConversation = conversationId.startsWith('space-');
     
     if (isSpaceConversation) {
-      console.log('🏢 [MessageService] Handling space conversation participants');
       // For space conversations, return empty array or virtual participants
       // In a real implementation, you'd fetch space members from the space service
       participants = [];
       
-      console.log('📦 [MessageService] Created virtual participants list for space');
+    
       await this.cacheManager.set(cacheKey, participants, 60000); // 1 minute
       return participants;
     }
     
     // For regular conversations, query the database
-    console.log('🔍 [MessageService] Querying DB for regular conversation participants');
+   
     participants = await this.participantRepository.find({
       where: { conversationId },
       relations: ['user'],
     });
     
-    console.log('✅ [MessageService] Found DB participants:', participants.length);
+
     await this.cacheManager.set(cacheKey, participants, 60000); // 1 minute
     
     return participants;
   }
 
   private async calculateUnreadCounts(conversationId: string, excludeUserId: string): Promise<Record<string, number>> {
-    console.log('📊 [MessageService] Calculating unread counts:', { conversationId, excludeUserId });
+  
     
     const participants = await this.getConversationParticipants(conversationId);
     const unreadCounts: Record<string, number> = {};
@@ -1082,7 +943,6 @@ export class MessageService {
     const isSpaceConversation = conversationId.startsWith('space-');
     
     if (isSpaceConversation) {
-      console.log('🏢 [MessageService] Space conversation - returning empty unread counts');
       return unreadCounts;
     }
 
@@ -1093,7 +953,6 @@ export class MessageService {
       }
     }
 
-    console.log('✅ [MessageService] Unread counts calculated:', Object.keys(unreadCounts).length);
     return unreadCounts;
   }
 
@@ -1137,15 +996,11 @@ export class MessageService {
 
   private async trackMessageDelivery(messageId: string, participants: ConversationParticipant[]): Promise<void> {
     try {
-      console.log('📍 [MessageService] Tracking message delivery:', {
-        messageId,
-        participantCount: participants.length,
-        isOptimisticId: messageId.startsWith('optimistic_')
-      });
+
 
       // Skip delivery tracking for optimistic messages (they'll be tracked when persisted with real ID)
       if (messageId.startsWith('optimistic_')) {
-        console.log('⏭️ [MessageService] Skipping delivery tracking for optimistic message');
+       
         return;
       }
 
@@ -1205,7 +1060,6 @@ export class MessageService {
         };
         
         await this.messageRepository.update(messageId, { metadata: updatedMetadata });
-        console.log('✅ [MessageService] Message delivery tracking completed');
       } else {
         console.log('⚠️ [MessageService] Message not found in DB for delivery tracking, skipping metadata update');
       }
@@ -1509,7 +1363,6 @@ export class MessageService {
         forwardedMessages.push(response.message);
 
       } catch (error) {
-        this.logger.error(`Failed to forward message to conversation ${conversationId}: ${getErrorMessage(error)}`);
         // Continue forwarding to other conversations
       }
     }

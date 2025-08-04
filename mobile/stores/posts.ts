@@ -469,7 +469,7 @@ export const usePostsStore = create<PostsState>()(
             }));
           }
         } catch (error) {
-          console.warn('Failed to like post:', error);
+        
         }
       },
       
@@ -491,7 +491,6 @@ export const usePostsStore = create<PostsState>()(
             }));
           }
         } catch (error) {
-          console.warn('Failed to unlike post:', error);
         }
       },
       
@@ -524,7 +523,7 @@ export const usePostsStore = create<PostsState>()(
           } else {
             // Fallback if response structure is different
             set({ communities: [] });
-            console.warn('Unexpected communities response structure:', response);
+           
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to fetch communities';
@@ -565,7 +564,7 @@ export const usePostsStore = create<PostsState>()(
           } else {
             // Fallback if response structure is different
             set({ joinedCommunities: [] });
-            console.warn('Unexpected joined communities response structure:', response);
+          
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to fetch joined communities';
@@ -589,7 +588,6 @@ export const usePostsStore = create<PostsState>()(
           } else {
             // Fallback if response structure is different
             set({ ownedCommunities: [] });
-            console.warn('Unexpected owned communities response structure:', response);
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to fetch owned communities';
@@ -773,14 +771,10 @@ export const usePostsStore = create<PostsState>()(
           
           const apiStore = useApiStore.getState();
           const url = communityId ? `/communities/${communityId}/spaces` : '/spaces';
-          console.log('🔍 Fetching spaces from URL:', url);
+        
           
           const response = await apiStore.get<ApiResponse<{ spaces: Space[] }>>(url);
-          console.log('📦 Spaces API response:', { 
-            success: response.success, 
-            dataLength: response.data?.spaces?.length,
-            communityId 
-          });
+       
           
           if (response.success && response.data) {
             if (communityId) {
@@ -790,18 +784,16 @@ export const usePostsStore = create<PostsState>()(
                   [communityId]: response.data?.spaces!
                 }
               }));
-              console.log('✅ Updated communitySpaces for:', communityId, 'with', response.data?.spaces?.length, 'spaces');
             } else {
               set({ spaces: response.data.spaces! });
-              console.log('✅ Updated global spaces with', response.data?.spaces?.length, 'spaces');
             }
           } else {
-            console.warn('❌ Spaces API failed:', response.message);
+           
             throw new Error(response.message || 'Failed to fetch spaces');
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to fetch spaces';
-          console.error('💥 Fetch spaces error:', error);
+    
           set({ spacesError: message });
         } finally {
           set({ isLoadingSpaces: false });
@@ -906,29 +898,21 @@ export const usePostsStore = create<PostsState>()(
           }
 
           // 🔧 FIX: Handle the actual response structure from backend
-          console.log('📦 Space content response:', { 
-            success: response.success, 
-            hasData: !!response.data,
-            dataKeys: response.data ? Object.keys(response.data) : null,
-            postsCount: response.data?.posts?.length || 0,
-            messagesCount: response.data?.messages?.length || 0
-          });
+      
 
           // Backend returns { posts: [...], total: number } or { messages: [...], total: number }
           if (type === 'posts' && response.data?.posts && Array.isArray(response.data.posts)) {
             set({ spaceContent: response.data.posts });
-            console.log('✅ Set spaceContent with', response.data.posts.length, 'posts');
+          
           } else if (type === 'messages' && response.data?.messages && Array.isArray(response.data.messages)) {
             set({ spaceContent: response.data.messages });
-            console.log('✅ Set spaceContent with', response.data.messages.length, 'messages');
           } else {
-            console.warn('⚠️ Unexpected response structure, setting empty array');
-            console.warn('Response data:', response.data);
+            
             set({ spaceContent: [] });
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to fetch space content';
-          console.error('💥 Fetch space content error:', error);
+         
           set({ spacesError: message });
           // Set empty array on error to avoid showing dummy data
           set({ spaceContent: [] });
@@ -949,18 +933,7 @@ export const usePostsStore = create<PostsState>()(
             throw new Error('Community ID not found for space');
           }
 
-          console.log('🚀 Creating space post:', { 
-            spaceId, 
-            title: data.title, 
-            type: data.type || 'text',
-            contentLength: data.content.length,
-            hasImages: !!data.images?.length,
-            hasVideos: !!data.videos?.length,
-            hasDocuments: !!data.documents?.length,
-            hasPoll: !!data.poll,
-            hasEvent: !!data.event,
-            hasLinkPreview: !!data.linkPreview
-          });
+      
 
           // Prepare the request payload
           const payload = {
@@ -984,16 +957,13 @@ export const usePostsStore = create<PostsState>()(
           );
 
           if (response.success) {
-            console.log('✅ Rich media post created successfully, refreshing content...');
             // Refresh space content to show the new post
             await get().fetchSpaceContent(spaceId, 'posts');
-            console.log('✅ Content refreshed successfully');
           } else {
             throw new Error(response.message || 'Failed to create post');
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to create post';
-          console.error('💥 Create space post error:', error);
           set({ spacesError: message, isLoadingSpaceContent: false });
           throw new Error(message);
         }
@@ -1212,14 +1182,14 @@ export const usePostsStore = create<PostsState>()(
           );
 
           if (response.success && response.data?.conversationId) {
-            console.log('✅ Space chat conversation created/retrieved:', response.data.conversationId);
+   
             return response.data.conversationId;
           } else {
             throw new Error(response.message || 'Failed to open space chat');
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to open space chat';
-          console.error('💥 Open space chat error:', error);
+       
           throw new Error(message);
         }
       },
@@ -1245,10 +1215,9 @@ export const usePostsStore = create<PostsState>()(
             throw new Error(response.message || 'Failed to send message');
           }
 
-          console.log('✅ Space message sent successfully');
+        
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to send message';
-          console.error('💥 Send space message error:', error);
           throw new Error(message);
         }
       },

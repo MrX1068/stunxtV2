@@ -123,9 +123,8 @@ export default function SpaceChatScreen({ spaceId, spaceName, communityId, onClo
       const convId = await joinSpaceChat(spaceId, spaceName || currentSpace?.name || 'Space Chat', communityId);
       setConversationId(convId);
       
-      console.log('✅ Space chat initialized:', { spaceId, conversationId: convId });
+    
     } catch (error) {
-      console.error('Failed to initialize space chat:', error);
       Alert.alert('Error', 'Failed to connect to chat. Please try again.');
     }
   };
@@ -133,14 +132,8 @@ export default function SpaceChatScreen({ spaceId, spaceName, communityId, onClo
   const handleSendMessage = () => {
     if (!inputText.trim() || !conversationId) return;
 
-    console.log('📤 [SpaceChatScreen] Sending message via sendMessageToConversation:', {
-      conversationId,
-      content: inputText.trim(),
-      timestamp: new Date().toISOString()
-    });
-
     const optimisticId = sendMessageToConversation(conversationId, inputText.trim(), 'text');
-    console.log('✅ [SpaceChatScreen] Message sent, optimisticId:', optimisticId);
+  
     
     setInputText('');
     

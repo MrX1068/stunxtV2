@@ -31,7 +31,6 @@ export default function WelcomeScreen() {
       // Guest users can browse but cannot create/join communities
       router.replace("/(tabs)/communities");
     } catch (error) {
-      console.error("Guest mode error:", error);
     } finally {
       setLoading(false);
     }

@@ -60,7 +60,6 @@ export class LoginAttemptService {
     type: AttemptType = AttemptType.LOGIN,
     additionalInfo?: Record<string, any>,
   ): Promise<LoginAttempt> {
-    this.logger.log(`Recording login attempt: ${email} - ${result} - ${type}`);
     
     const geoInfo = await this.getGeoInfo(ipAddress);
     const deviceInfo = this.parseUserAgent(userAgent);
@@ -83,18 +82,12 @@ export class LoginAttemptService {
 
     const savedAttempt = await this.attemptRepository.save(attempt);
     
-    this.logger.log(`Login attempt saved with ID: ${savedAttempt.id}, userId: ${savedAttempt.userId}`);
 
     // Log suspicious activity
     if (result !== AttemptResult.SUCCESS) {
       const suspiciousInfo = await this.analyzeSuspiciousActivity(email, ipAddress);
       if (suspiciousInfo.isHighRisk) {
-        this.logger.warn(`High-risk login attempt detected`, {
-          email,
-          ipAddress,
-          riskScore: suspiciousInfo.riskScore,
-          reasons: suspiciousInfo.reasons,
-        });
+  
       }
     }
 
@@ -376,7 +369,6 @@ export class LoginAttemptService {
       // For now, return null to indicate geo info is unavailable
       return null;
     } catch (error) {
-      this.logger.error(`Failed to get geo info for IP ${ipAddress}:`, error);
       return null;
     }
   }
@@ -424,7 +416,6 @@ export class LoginAttemptService {
       createdAt: MoreThan(cutoffDate),
     });
 
-    this.logger.log(`Cleaned up ${deleted.affected || 0} old login attempts`);
   }
 
   /**
@@ -503,7 +494,6 @@ export class LoginAttemptService {
    */
   async getUserAttempts(userId: string, since: Date): Promise<LoginAttempt[]> {
     try {
-      this.logger.log(`Getting attempts for userId: ${userId} since: ${since.toISOString()}`);
       
       const attempts = await this.attemptRepository.find({
         where: {
@@ -515,7 +505,7 @@ export class LoginAttemptService {
         },
       });
       
-      this.logger.log(`Found ${attempts.length} attempts for user ${userId}`);
+ 
       
       // Also try finding by email for debugging
       const attemptsByEmail = await this.attemptRepository.find({
@@ -528,7 +518,6 @@ export class LoginAttemptService {
         },
       });
       
-      this.logger.log(`Found ${attemptsByEmail.length} attempts by email search`);
       
       // Let's also get all recent attempts to see what's there
       const allRecentAttempts = await this.attemptRepository.find({
@@ -541,14 +530,12 @@ export class LoginAttemptService {
         take: 10,
       });
       
-      this.logger.log(`Total recent attempts: ${allRecentAttempts.length}`);
       allRecentAttempts.forEach(attempt => {
         this.logger.log(`Attempt: userId=${attempt.userId}, email=${attempt.email}, result=${attempt.result}`);
       });
       
       return attempts;
     } catch (error) {
-      this.logger.error(`Error getting user attempts for ${userId}:`, error);
       return [];
     }
   }
@@ -596,7 +583,6 @@ export class LoginAttemptService {
 
       return results;
     } catch (error) {
-      this.logger.error(`Error getting debug attempts:`, error);
       return { error: error.message };
     }
   }

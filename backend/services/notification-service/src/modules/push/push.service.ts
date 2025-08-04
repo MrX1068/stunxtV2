@@ -48,7 +48,7 @@ export class PushService {
       const firebaseConfig = this.configService.get('FIREBASE_CONFIG');
       
       if (!firebaseConfig) {
-        this.logger.warn('Firebase config not found, FCM push notifications disabled');
+
         return;
       }
 
@@ -58,10 +58,9 @@ export class PushService {
         credential: admin.credential.cert(config),
       }, 'notification-service');
 
-      this.logger.log('Firebase Admin SDK initialized for push notifications');
+    
       
     } catch (error) {
-      this.logger.error('Failed to initialize Firebase:', error);
     }
   }
 
@@ -75,7 +74,6 @@ export class PushService {
       }
 
       if (!dto.deviceTokens || dto.deviceTokens.length === 0) {
-        this.logger.warn(`No device tokens found for user ${dto.userId}`);
         return { success: false, error: 'No device tokens found' };
       }
 
@@ -126,7 +124,6 @@ export class PushService {
 
       const response = await messaging.sendEachForMulticast(message);
 
-      this.logger.log(`FCM notification sent to ${dto.deviceTokens.length} devices. Success: ${response.successCount}, Failure: ${response.failureCount}`);
 
       if (response.failureCount > 0) {
         const failedTokens = [];
@@ -139,7 +136,6 @@ export class PushService {
           }
         });
         
-        this.logger.warn(`Failed to send to tokens:`, failedTokens);
       }
 
       return {
@@ -148,7 +144,6 @@ export class PushService {
       };
 
     } catch (error) {
-      this.logger.error(`Failed to send FCM notification:`, error);
       return {
         success: false,
         error: error.message,
@@ -174,11 +169,9 @@ export class PushService {
       const payload = JSON.stringify(dto.payload);
       await webpush.sendNotification(dto.subscription, payload);
 
-      this.logger.log(`Web push notification sent successfully`);
       return { success: true };
 
     } catch (error) {
-      this.logger.error(`Failed to send web push notification:`, error);
       return {
         success: false,
         error: error.message,
@@ -228,7 +221,7 @@ export class PushService {
 
       const response = await messaging.send(message);
 
-      this.logger.log(`Topic notification sent to topic "${topic}". Message ID: ${response}`);
+   
 
       return {
         success: true,
@@ -236,7 +229,6 @@ export class PushService {
       };
 
     } catch (error) {
-      this.logger.error(`Failed to send topic notification:`, error);
       return {
         success: false,
         error: error.message,
@@ -257,12 +249,11 @@ export class PushService {
       
       await messaging.subscribeToTopic(deviceTokens, topic);
 
-      this.logger.log(`Subscribed ${deviceTokens.length} devices to topic "${topic}"`);
+
 
       return { success: true };
 
     } catch (error) {
-      this.logger.error(`Failed to subscribe to topic:`, error);
       return {
         success: false,
         error: error.message,
@@ -283,12 +274,10 @@ export class PushService {
       
       await messaging.unsubscribeFromTopic(deviceTokens, topic);
 
-      this.logger.log(`Unsubscribed ${deviceTokens.length} devices from topic "${topic}"`);
 
       return { success: true };
 
     } catch (error) {
-      this.logger.error(`Failed to unsubscribe from topic:`, error);
       return {
         success: false,
         error: error.message,
@@ -323,7 +312,6 @@ export class PushService {
       return true;
 
     } catch (error) {
-      this.logger.warn(`Invalid device token: ${token}`);
       return false;
     }
   }

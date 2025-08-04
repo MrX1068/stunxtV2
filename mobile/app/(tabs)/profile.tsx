@@ -99,7 +99,6 @@ export default function ProfileScreen() {
     try {
       await refreshUserData();
     } catch (error) {
-      console.error('Error refreshing user data:', error);
     } finally {
       setRefreshing(false);
     }
@@ -120,7 +119,6 @@ export default function ProfileScreen() {
               // Navigate to the main index page after logout
               router.replace("/");
             } catch (error) {
-              console.error("Logout error:", error);
               // Still navigate even if logout API fails
               router.replace("/");
             }

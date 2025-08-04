@@ -55,7 +55,7 @@ export class UploadService {
     userId: string,
   ): Promise<File> {
     try {
-      this.logger.log(`Starting file upload: ${file.originalname} for user: ${userId}`);
+    
 
       // Validate file
       await this.validateFile(file);
@@ -67,7 +67,7 @@ export class UploadService {
       );
 
       if (scanResult.isInfected) {
-        this.logger.warn(`Virus detected in upload: ${file.originalname}, viruses: ${scanResult.viruses.join(', ')}`);
+       
         throw new BadRequestException(
           `File rejected: virus detected (${scanResult.viruses.join(', ')})`
         );
@@ -82,7 +82,6 @@ export class UploadService {
       // Check for duplicate files
       const existingFile = await this.checkDuplicateFile(checksum, userId);
       if (existingFile) {
-        this.logger.log(`Duplicate file detected: ${existingFile.id}`);
         return existingFile;
       }
 
@@ -115,17 +114,15 @@ export class UploadService {
 
       // For avatar uploads, process immediately (no background queue needed)
       if (dto.category === FileCategory.AVATAR) {
-        this.logger.log(`🔄 Processing avatar upload immediately: ${savedFile.id}`);
-        this.logger.log(`⏳ Current file primaryUrl: ${savedFile.primaryUrl}`);
+     
         try {
           await this.processFileUpload(savedFile.id, file.buffer, dto.variants);
           // Re-fetch the file to get updated URL
           const updatedFile = await this.fileRepository.findOne({ where: { id: savedFile.id } });
-          this.logger.log(`✅ Avatar processing completed! Updated URL: ${updatedFile?.primaryUrl}`);
+      
           return updatedFile || savedFile;
         } catch (error) {
-          this.logger.error(`❌ Avatar processing failed: ${error.message}`);
-          this.logger.error(`Stack trace:`, error.stack);
+         
           // Fall back to returning the queued file
           return savedFile;
         }
@@ -145,11 +142,11 @@ export class UploadService {
         },
       });
 
-      this.logger.log(`File queued for background processing: ${savedFile.id}`);
+     
       return savedFile;
 
     } catch (error) {
-      this.logger.error('File upload failed:', error);
+     
       throw error;
     }
   }
@@ -158,22 +155,21 @@ export class UploadService {
    * Process file upload in background
    */
   async processFileUpload(fileId: string, fileBuffer: Buffer, generateVariants?: string[]): Promise<void> {
-    console.log("calling proceed")
+
     const file = await this.fileRepository.findOne({ where: { id: fileId } });
     if (!file) {
       throw new Error(`File not found: ${fileId}`);
     }
 
     try {
-      this.logger.log(`🔄 Processing file upload: ${file.id}`);
-      this.logger.log(`📁 File details: ${file.originalName} (${file.size} bytes)`);
+  
 
       // Choose storage provider based on file type
       const provider = this.chooseStorageProvider(file.type);
-      this.logger.log(`☁️ Using storage provider: ${provider.provider}`);
+
       
       // Upload to primary storage
-      this.logger.log(`📤 Starting upload to ${provider.provider}...`);
+
       const uploadResult = await provider.upload({
         fileName: file.filename,
         buffer: fileBuffer,
@@ -183,7 +179,7 @@ export class UploadService {
         isPublic: file.privacy === FilePrivacy.PUBLIC,
       });
       
-      this.logger.log(`✅ Upload successful! URL: ${uploadResult.url}`);
+
 
       // Update file with storage information
       file.primaryProvider = provider.provider;
@@ -198,11 +194,11 @@ export class UploadService {
       };
 
       await this.fileRepository.save(file);
-      this.logger.log(`💾 File entity updated with storage info`);
+   
 
       // Generate variants if requested
       if (generateVariants && generateVariants.length > 0) {
-        this.logger.log(`🎨 Queueing variant generation: ${generateVariants.join(', ')}`);
+    
         await this.processingQueue.add('generate-variants', {
           fileId: file.id,
           variants: generateVariants,
@@ -212,18 +208,10 @@ export class UploadService {
       // Upload backup copy if configured (disabled for now)
       // await this.uploadBackupCopy(file, fileBuffer);
 
-      this.logger.log(`🎉 File upload completed: ${file.id}`);
-      this.logger.log(`🔗 Final file URL: ${file.primaryUrl}`);
-      this.logger.log(`☁️ Storage provider: ${file.primaryProvider}`);
-      this.logger.log(`📊 File status: ${file.status}`);
+    
 
     } catch (error) {
-      this.logger.error(`❌ File upload processing failed: ${fileId}`, error);
-      this.logger.error(`Error details:`, {
-        message: error.message,
-        stack: error.stack,
-        name: error.name
-      });
+   
       
       // Update file status to failed
       file.status = FileStatus.FAILED;
@@ -276,7 +264,7 @@ export class UploadService {
       const fileType = await fileTypeFromBuffer(buffer);
       
       if (fileType && !mimeType.includes(fileType.mime)) {
-        this.logger.warn(`MIME type mismatch: declared ${mimeType}, actual ${fileType.mime}`);
+       
         // For now, log warning. In production, you might want to reject the file
       }
 
@@ -300,7 +288,7 @@ export class UploadService {
         throw error;
       }
       // If file type detection fails, continue (might be a valid binary file)
-      this.logger.warn('File type detection failed:', error.message);
+
     }
   }
 
@@ -382,10 +370,8 @@ export class UploadService {
         file.backupUrl = backupResult.url;
         
         await this.fileRepository.save(file);
-        this.logger.log(`Backup created for file: ${file.id}`);
       }
     } catch (error) {
-      this.logger.warn(`Failed to create backup for file ${file.id}:`, error);
       // Don't fail the main upload if backup fails
     }
   }

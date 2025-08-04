@@ -38,7 +38,6 @@ export function useAvatarSizes(userId?: string) {
         setAvatarSizes(null);
       }
     } catch (err) {
-      console.error('Failed to fetch avatar sizes:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch avatar sizes');
       setAvatarSizes(null);
     } finally {

@@ -45,14 +45,6 @@ export default function CommunitiesScreen() {
   // 🛡️ Professional Role-Based Permissions
   const canCreateCommunity = PermissionManager.canCreateCommunity(user);
   
-  console.log('🔐 Community Permission Status:', {
-    userId: user?.id,
-    canCreateCommunity,
-    userRole: user?.role,
-    isVerified: user?.isVerified,
-    emailVerified: user?.emailVerified,
-    status: user?.status
-  });
 
   // Fetch data on mount
   useEffect(() => {
@@ -64,7 +56,6 @@ export default function CommunitiesScreen() {
           fetchOwnedCommunities(),
         ]);
       } catch (error) {
-        console.warn('Failed to load communities data:', error);
       }
     };
 
@@ -96,13 +87,11 @@ export default function CommunitiesScreen() {
           break;
       }
     } catch (error) {
-      console.warn('Failed to refresh data:', error);
     }
   };
 
   const handleCommunityPress = (community: Community) => {
     // Navigate to community detail screen with spaces
-    console.log('Opening community:', community.name);
     router.push(`/community/${community.id}`);
   };
 
@@ -110,7 +99,6 @@ export default function CommunitiesScreen() {
     try {
       await joinCommunity(communityId);
     } catch (error) {
-      console.warn('Failed to join community:', error);
     }
   };
 
@@ -118,7 +106,6 @@ export default function CommunitiesScreen() {
     try {
       await leaveCommunity(communityId);
     } catch (error) {
-      console.warn('Failed to leave community:', error);
     }
   };
 

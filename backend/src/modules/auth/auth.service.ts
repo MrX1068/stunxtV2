@@ -190,7 +190,7 @@ export class AuthService {
         { userId: savedUser.id, sessionId: session.id },
       );
 
-      this.logger.log(`User registered successfully: ${email}`);
+  
 
       return {
         user: this.sanitizeUser(savedUser),
@@ -203,7 +203,7 @@ export class AuthService {
         throw error;
       }
 
-      this.logger.error(`Registration failed for ${email}:`, error);
+    
       throw new BadRequestException('Registration failed');
     }
   }
@@ -295,7 +295,7 @@ export class AuthService {
         { userId: updatedUser.id },
       );
 
-      this.logger.log(`Email verified successfully and user logged in: ${email}`);
+  
 
       return this.responseService.success(
         {
@@ -310,7 +310,7 @@ export class AuthService {
         throw error;
       }
 
-      this.logger.error(`Email verification failed for ${email}:`, error);
+     
       throw new BadRequestException('Email verification failed');
     }
   }
@@ -355,11 +355,11 @@ export class AuthService {
         this.configService.get<number>('jwt.otpExpiration', 600) / 60, // Convert seconds to minutes
       );
 
-      this.logger.log(`Email verification resent: ${email}`);
+
 
       return { success: true, message: 'Verification email sent' };
     } catch (error) {
-      this.logger.error(`Failed to resend verification email for ${email}:`, error);
+    
       return { success: true, message: 'If an account exists, verification email has been sent' };
     }
   }
@@ -406,10 +406,10 @@ export class AuthService {
       }
 
       // Check if account is locked
-      this.logger.log(`Checking lock status for ${email}. Failed attempts: ${user.failedLoginAttempts}, locked until: ${user.lockedUntil}`);
+     
       
       if (user.isLocked()) {
-        this.logger.warn(`Login blocked for ${email} - account is locked until ${user.lockedUntil}`);
+       
         
         await this.loginAttemptService.recordAttempt(
           email,
@@ -437,7 +437,7 @@ export class AuthService {
 
       // Verify password
       const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-      this.logger.log(`Password validation for ${email}: ${isPasswordValid ? 'VALID' : 'INVALID'}`);
+
       
       if (!isPasswordValid) {
         await this.handleFailedLoginAttempt(user, email, ipAddress, userAgent);
@@ -472,7 +472,7 @@ export class AuthService {
         lastLoginAt: new Date(),
       });
 
-      this.logger.log(`User logged in successfully: ${email}`);
+    
 
       return {
         user: this.sanitizeUser(user),
@@ -485,7 +485,7 @@ export class AuthService {
         throw error;
       }
 
-      this.logger.error(`Login failed for ${email}:`, error);
+    
       throw new UnauthorizedException('Login failed');
     }
   }
@@ -552,7 +552,7 @@ export class AuthService {
         { userId: user.id, sessionId: session.id },
       );
 
-      this.logger.log(`Tokens refreshed for user: ${user.email}`);
+
 
       return newTokens;
     } catch (error) {
@@ -560,7 +560,7 @@ export class AuthService {
         throw error;
       }
 
-      this.logger.error('Token refresh failed:', error);
+   
       throw new UnauthorizedException('Failed to refresh token');
     }
   }
@@ -571,9 +571,9 @@ export class AuthService {
   async logout(sessionId: string, userId: string): Promise<void> {
     try {
       await this.userSessionService.invalidateSession(sessionId);
-      this.logger.log(`User logged out: ${userId}`);
+    
     } catch (error) {
-      this.logger.error(`Logout failed for user ${userId}:`, error);
+     
       throw new BadRequestException('Logout failed');
     }
   }
@@ -635,13 +635,13 @@ export class AuthService {
         { userId: user.id },
       );
 
-      this.logger.log(`Password changed for user: ${user.email}`);
+    
     } catch (error) {
       if (error instanceof UnauthorizedException) {
         throw error;
       }
 
-      this.logger.error(`Password change failed for user ${userId}:`, error);
+   
       throw new BadRequestException('Password change failed');
     }
   }
@@ -663,7 +663,7 @@ export class AuthService {
 
       if (!user) {
         // Don't reveal if user exists or not
-        this.logger.warn(`Password reset requested for non-existent email: ${email}`);
+
         return;
       }
 
@@ -693,9 +693,9 @@ export class AuthService {
         { userId: user.id },
       );
 
-      this.logger.log(`Password reset OTP sent for: ${email}`);
+
     } catch (error) {
-      this.logger.error(`Password reset request failed for ${email}:`, error);
+
       // Don't throw error to prevent user enumeration
     }
   }
@@ -759,13 +759,12 @@ export class AuthService {
         { userId: user.id },
       );
 
-      this.logger.log(`Password reset completed for: ${user.email}`);
+ 
     } catch (error) {
       if (error instanceof BadRequestException) {
         throw error;
       }
 
-      this.logger.error('Password reset failed:', error);
       throw new BadRequestException('Password reset failed');
     }
   }
@@ -795,7 +794,7 @@ export class AuthService {
         lastLoginAt: new Date(),
       });
 
-      this.logger.log(`User login completed successfully: ${user.email}`);
+   
 
       return {
         user,
@@ -804,7 +803,6 @@ export class AuthService {
         requiresEmailVerification: !user.emailVerified,
       };
     } catch (error) {
-      this.logger.error(`Login completion failed for user ${user.id}:`, error);
       throw new BadRequestException('Login completion failed');
     }
   }
@@ -818,13 +816,11 @@ export class AuthService {
     ipAddress: string,
     userAgent: string,
   ): Promise<never> {
-    this.logger.log(`Failed login attempt for ${email}. Current failed attempts: ${user.failedLoginAttempts}`);
     
     // Increment failed attempts and potentially lock account
     user.incrementFailedAttempts();
     const savedUser = await this.userRepository.save(user);
     
-    this.logger.log(`Updated user ${email}. New failed attempts: ${savedUser.failedLoginAttempts}, locked until: ${savedUser.lockedUntil}`);
 
     // Record the failed attempt
     await this.loginAttemptService.recordAttempt(
@@ -838,7 +834,6 @@ export class AuthService {
     
     const remainingAttempts = Math.max(0, 5 - savedUser.failedLoginAttempts);
     if (remainingAttempts === 0) {
-      this.logger.warn(`Account ${email} is now LOCKED until ${savedUser.lockedUntil}`);
       
       // Send account lockout email notification
       try {
@@ -850,13 +845,11 @@ export class AuthService {
           userAgent
         );
       } catch (emailError) {
-        this.logger.error(`Failed to send lockout email to ${email}:`, emailError);
         // Don't throw error here, the main authentication flow should continue
       }
       
       throw new UnauthorizedException('Account has been locked due to too many failed attempts. Please try again in 30 minutes.');
     } else {
-      this.logger.log(`${remainingAttempts} attempts remaining for ${email}`);
       throw new UnauthorizedException(`Invalid credentials. ${remainingAttempts} attempts remaining before account lock.`);
     }
   }
@@ -902,10 +895,8 @@ export class AuthService {
       }
 
       // Check if account is locked
-      this.logger.log(`Checking lock status for ${email}. Failed attempts: ${user.failedLoginAttempts}, locked until: ${user.lockedUntil}`);
       
       if (user.isLocked()) {
-        this.logger.warn(`Login blocked for ${email} - account is locked until ${user.lockedUntil}`);
         
         await this.loginAttemptService.recordAttempt(
           email,
@@ -933,7 +924,6 @@ export class AuthService {
 
       // Verify password
       const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
-      this.logger.log(`Password validation for ${email}: ${isPasswordValid ? 'VALID' : 'INVALID'}`);
       
       if (!isPasswordValid) {
         await this.handleFailedLoginAttempt(user, email, ipAddress, userAgent);
@@ -953,7 +943,6 @@ export class AuthService {
         { userId: user.id },
       );
 
-      this.logger.log(`User validation successful: ${email}`);
 
       // Return sanitized user (without password hash)
       return this.sanitizeUser(user);
@@ -962,7 +951,6 @@ export class AuthService {
         throw error;
       }
 
-      this.logger.error(`User validation failed for ${email}:`, error);
       return null;
     }
   }
@@ -976,7 +964,6 @@ export class AuthService {
         where: { id },
       });
     } catch (error) {
-      this.logger.error(`Failed to get user by ID ${id}:`, error);
       return null;
     }
   }
@@ -1007,7 +994,6 @@ export class AuthService {
 
       return user;
     } catch (error) {
-      this.logger.error('JWT payload validation failed:', error);
       return null;
     }
   }
@@ -1089,9 +1075,7 @@ export class AuthService {
         lastRefreshedAt: new Date(),
       });
 
-      this.logger.debug(`Refresh token stored for session: ${sessionId}`);
     } catch (error) {
-      this.logger.error('Failed to store refresh token:', error);
       throw new Error('Failed to generate session tokens');
     }
   }
@@ -1225,7 +1209,6 @@ export class AuthService {
         recommendations: this.getSecurityRecommendations(user, attempts),
       };
     } catch (error) {
-      this.logger.error(`Error getting security stats for user ${userId}:`, error);
       return {
         accountSecurity: {
           failedLoginAttempts: 0,
@@ -1320,9 +1303,7 @@ export class AuthService {
       user.resetFailedAttempts();
       await this.userRepository.save(user);
 
-      this.logger.log(`User account unlocked: ${user.email}`);
     } catch (error) {
-      this.logger.error(`Error unlocking user account ${userId}:`, error);
       throw new BadRequestException('Failed to unlock account');
     }
   }
@@ -1361,7 +1342,6 @@ export class AuthService {
         attempts,
       };
     } catch (error) {
-      this.logger.error(`Error getting debug info for user ${userId}:`, error);
       return { error: error.message };
     }
   }
