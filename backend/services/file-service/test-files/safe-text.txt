@@ -1,1 +1,0 @@
-This is a safe text file for testing file uploads.
