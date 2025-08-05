@@ -224,7 +224,7 @@ interface PostsState {
   spaces: Space[];
   communitySpaces: Record<string, Space[]>;
   currentSpace: Space | null;
-  spaceContent: Post[]; // Posts/messages for current space
+  spaceContents: Record<string, Post[]>; // Posts/messages for current space, keyed by spaceId
   isLoadingSpaces: boolean;
   isLoadingSpaceContent: boolean;
   spacesError: string | null;
@@ -262,7 +262,7 @@ interface PostsState {
   fetchSpaces: (communityId?: string) => Promise<void>;
   fetchSpacesByCommunity: (communityId: string) => Promise<void>;
   fetchSpace: (id: string) => Promise<void>;
-  fetchSpaceContent: (spaceId: string, type?: 'posts' | 'messages') => Promise<void>;
+  fetchSpaceContent: (params: { spaceId: string; communityId: string; type?: 'posts' | 'messages' }) => Promise<void>;
   createSpacePost: (spaceId: string, data: CreateSpacePostData) => Promise<void>;
   createSpace: (data: CreateSpaceData) => Promise<Space>;
   updateSpace: (id: string, data: Partial<CreateSpaceData>) => Promise<void>;
@@ -301,7 +301,7 @@ export const usePostsStore = create<PostsState>()(
       spaces: [],
       communitySpaces: {},
       currentSpace: null,
-      spaceContent: [],
+      spaceContents: {},
       isLoadingSpaces: false,
       isLoadingSpaceContent: false,
       spacesError: null,
@@ -867,55 +867,57 @@ export const usePostsStore = create<PostsState>()(
         }
       },
 
-      fetchSpaceContent: async (spaceId: string, type: 'posts' | 'messages' = 'posts') => {
+      fetchSpaceContent: async (params: { spaceId: string; communityId: string; type?: 'posts' | 'messages' }) => {
+        if (!params || !params.spaceId || !params.communityId) {
+          console.error('❌ [PostsStore] fetchSpaceContent called with invalid params:', params);
+          // We don't want to throw an error here, just stop execution,
+          // as another valid call might be on its way.
+          return;
+        }
+
+        const { spaceId, communityId, type = 'posts' } = params;
         try {
           set({ isLoadingSpaceContent: true, spacesError: null });
           
           const apiStore = useApiStore.getState();
-          const { currentSpace } = get();
           
-          // We need the community ID for the correct endpoint
-          if (!currentSpace?.communityId) {
-            throw new Error('Community ID not found for space');
-          }
-          
-          let response;
-          
-          // Use the new secure space content endpoints with community context
-          if (type === 'posts') {
-            response = await apiStore.get<ApiResponse<any>>(
-              `/communities/${currentSpace.communityId}/spaces/${spaceId}/content?limit=50&type=posts`
-            );
-          } else {
-            // For messages, use the content endpoint with messages type
-            response = await apiStore.get<ApiResponse<any>>(
-              `/communities/${currentSpace.communityId}/spaces/${spaceId}/content?limit=50&type=messages`
-            );
-          }
-          
+          const response = await apiStore.get<ApiResponse<any>>(
+            `/communities/${communityId}/spaces/${spaceId}/content?limit=50&type=${type}`
+          );
+                   
           if (!response.success) {
             throw new Error(response.message || 'Failed to fetch space content');
           }
 
-          // 🔧 FIX: Handle the actual response structure from backend
-      
+          const content = type === 'messages' ? response.data?.messages : response.data?.posts;
 
-          // Backend returns { posts: [...], total: number } or { messages: [...], total: number }
-          if (type === 'posts' && response.data?.posts && Array.isArray(response.data.posts)) {
-            set({ spaceContent: response.data.posts });
-          
-          } else if (type === 'messages' && response.data?.messages && Array.isArray(response.data.messages)) {
-            set({ spaceContent: response.data.messages });
+          if (content && Array.isArray(content)) {
+            set(state => ({ 
+              spaceContents: {
+                ...state.spaceContents,
+                [spaceId]: content
+              } 
+            }));
           } else {
-            
-            set({ spaceContent: [] });
+            console.warn(`[PostsStore] No content found for space ${spaceId} of type ${type}. Response:`, response);
+            set(state => ({ 
+              spaceContents: {
+                ...state.spaceContents,
+                [spaceId]: []
+              } 
+            }));
           }
         } catch (error) {
           const message = error instanceof Error ? error.message : 'Failed to fetch space content';
          
           set({ spacesError: message });
           // Set empty array on error to avoid showing dummy data
-          set({ spaceContent: [] });
+          set(state => ({ 
+            spaceContents: {
+              ...state.spaceContents,
+              [spaceId]: []
+            } 
+          }));
         } finally {
           set({ isLoadingSpaceContent: false });
         }
@@ -958,7 +960,11 @@ export const usePostsStore = create<PostsState>()(
 
           if (response.success) {
             // Refresh space content to show the new post
-            await get().fetchSpaceContent(spaceId, 'posts');
+            await get().fetchSpaceContent({
+              spaceId,
+              communityId: currentSpace.communityId,
+              type: 'posts'
+            });
           } else {
             throw new Error(response.message || 'Failed to create post');
           }
@@ -1308,7 +1314,7 @@ export const useSpaces = () => {
     spaces: postsStore.spaces,
     communitySpaces: postsStore.communitySpaces,
     currentSpace: postsStore.currentSpace,
-    spaceContent: postsStore.spaceContent,
+    spaceContents: postsStore.spaceContents,
     isLoading: postsStore.isLoadingSpaces,
     isLoadingContent: postsStore.isLoadingSpaceContent,
     error: postsStore.spacesError,

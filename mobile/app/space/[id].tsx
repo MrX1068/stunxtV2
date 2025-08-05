@@ -18,7 +18,7 @@ import EmojiPicker from '@/components/chat/EmojiPicker';
 export default function SpaceDetailScreen() {
   const router = useRouter();
   const { id } = useLocalSearchParams<{ id: string }>();
-  const { currentSpace, fetchSpace, fetchSpaceContent, joinSpace, leaveSpace, createSpacePost, spaceContent, isLoading, isLoadingContent, error } = useSpaces();
+  const { currentSpace, fetchSpace, fetchSpaceContent, joinSpace, leaveSpace, createSpacePost, spaceContents, isLoading, isLoadingContent, error } = useSpaces();
   const { user } = useAuth();
   const { 
     connect, 
@@ -34,7 +34,9 @@ export default function SpaceDetailScreen() {
     retryFailedMessages,
     typingUsers,
     startTyping,
-    stopTyping
+    stopTyping,
+    forceClearChatData,
+    activeConversationId
   } = useChatStore();
   
   const [isJoining, setIsJoining] = useState(false);
@@ -47,52 +49,122 @@ export default function SpaceDetailScreen() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const [typingTimeout, setTypingTimeout] = useState<ReturnType<typeof setTimeout> | null>(null);
-
+  
+  // ✅ CRITICAL FIX: Debounce debug logs to prevent spam
+  const [lastDebugTime, setLastDebugTime] = useState(0);
+  const debugState = () => {
+    const now = Date.now();
+    if (now - lastDebugTime > 1000) { // Only log every 1 second
+      console.log("🔍 DEBUG STATE:", { 
+        id, 
+        conversationId, 
+        currentSpaceId: currentSpace?.id, 
+        messagesCount: conversationId ? (messages[conversationId]?.length || 0) : 0,
+        spaceContentsCount: currentSpace?.id ? (spaceContents[currentSpace.id]?.length || 0) : 0,
+        connectionStatus: connectionStatus.connected
+      });
+      setLastDebugTime(now);
+    }
+  };
+  
+  // Call debug state only when needed
+  React.useEffect(() => {
+    debugState();
+  }, [id, conversationId, currentSpace?.id, messages, connectionStatus.connected]);
   useEffect(() => {
-    // 🚀 Professional Space Navigation Cleanup - Reset conversation state when space changes
+    // 🚀 CRITICAL FIX: Instant space navigation with immediate conversation setup
     if (id) {
-      // Clear previous space conversation state immediately using professional cache system
+      const newConversationId = `space-${id}`;
       const previousConversationId = conversationId;
-      setConversationId(null);
-      setIsConnecting(false);
       
-      // Clear previous space chat state if it exists
-      if (previousConversationId) {
-     
-        clearSpaceChatState(previousConversationId);
+      console.log('🔄 Navigating to space:', id, 'from previous:', previousConversationId);
+      
+      // STEP 1: Immediately set the new conversation ID for instant UI update
+      if (previousConversationId !== newConversationId) {
+        if (previousConversationId) {
+          console.log('🗑️ Clearing previous conversation:', previousConversationId);
+          // Clear only memory state, preserve SQLite cache
+          useChatStore.setState((state) => {
+            delete state.messages[previousConversationId];
+            if (state.activeConversationId === previousConversationId) {
+              state.activeConversationId = null;
+              state.activeConversation = null;
+            }
+          });
+        }
+        
+        // Immediately set new conversation ID to prevent stale state
+        setConversationId(newConversationId);
       }
       
-      // Fetch new space data
-      fetchSpace(id);
+      // STEP 2: Reset UI state
+      setIsConnecting(false);
+      setChatMessage('');
       
-     
+      // STEP 3: Fetch space data in parallel with cache loading
+      fetchSpace(id);
     }
     
-    // Cleanup function when component unmounts or space ID changes
+    // Cleanup function - only clear on component unmount
     return () => {
+      // Only cleanup if we're actually leaving the component
       if (conversationId) {
+        console.log('🧹 Component unmounting, cleaning up:', conversationId);
         clearSpaceChatState(conversationId);
       }
-      setConversationId(null);
-      setIsConnecting(false);
     };
   }, [id]);
+
+  // ✅ CRITICAL FIX: Handle interaction type changes (post ↔ chat)
+  useEffect(() => {
+    if (currentSpace?.id) {
+      const expectedConversationId = `space-${currentSpace.id}`;
+      
+      if (currentSpace.interactionType === 'chat') {
+        // Switching TO chat - ensure proper initialization
+        if (!conversationId || conversationId !== expectedConversationId) {
+          console.log('🔄 Switching to chat mode, initializing conversation:', expectedConversationId);
+          
+          // Force clear all chat data for clean switch
+          useChatStore.getState().forceClearChatData();
+          
+          setConversationId(expectedConversationId);
+        }
+      } else {
+        // Switching FROM chat - clear chat state completely
+        if (conversationId) {
+          console.log('🗑️ Switching from chat mode, clearing conversation:', conversationId);
+          
+          // Use the new force clear method for complete cleanup
+          useChatStore.getState().forceClearChatData();
+          
+          setConversationId(null);
+          setChatMessage('');
+        }
+      }
+    }
+  }, [currentSpace?.id, currentSpace?.interactionType]);
 
   // Sync space content with chat messages for chat spaces (optimized)
   useEffect(() => {
     if (currentSpace?.interactionType === 'chat' && 
         currentSpace.id && 
-        spaceContent && 
-        Array.isArray(spaceContent) && 
-        spaceContent.length > 0) {
-      // Use a timeout to debounce rapid updates
-      const timeoutId = setTimeout(() => {
-        syncSpaceMessages(currentSpace.id, spaceContent);
-      }, 100);
+        spaceContents[currentSpace.id] && 
+        Array.isArray(spaceContents[currentSpace.id]) && 
+        spaceContents[currentSpace.id].length > 0 &&
+        conversationId === `space-${currentSpace.id}`) {
       
-      return () => clearTimeout(timeoutId);
+      // ✅ CRITICAL FIX: Only sync once and don't interfere with real-time messages
+      const existingMessages = messages[conversationId] || [];
+      const hasApiMessages = existingMessages.some(msg => !msg.optimisticId);
+      
+      // Only sync API messages if we don't already have them
+      if (!hasApiMessages) {
+        console.log('🔄 Syncing API messages to chat store for space:', currentSpace.id);
+        syncSpaceMessages(currentSpace.id, spaceContents[currentSpace.id]);
+      }
     }
-  }, [currentSpace?.id, currentSpace?.interactionType, spaceContent?.length]);
+  }, [currentSpace?.id, spaceContents]);
 
   // Clear chat state when switching spaces to prevent cache confusion
   useEffect(() => {
@@ -105,8 +177,18 @@ export default function SpaceDetailScreen() {
 
   // Setup chat conversation for chat spaces
   useEffect(() => {
-    if (currentSpace?.interactionType === 'chat' && currentSpace.id && !conversationId) {
-      initializeSpaceChat();
+    if (currentSpace?.interactionType === 'chat' && currentSpace.id) {
+      const expectedConversationId = `space-${currentSpace.id}`;
+      
+      // ✅ CRITICAL FIX: Always initialize if conversation ID doesn't match current space
+      if (!conversationId || conversationId !== expectedConversationId) {
+        console.log('🚀 Space chat needs initialization:', {
+          currentSpaceId: currentSpace.id,
+          conversationId,
+          expectedConversationId
+        });
+        initializeSpaceChat();
+      }
     }
   }, [currentSpace?.id, currentSpace?.interactionType, conversationId]);
 
@@ -131,47 +213,55 @@ export default function SpaceDetailScreen() {
     if (!currentSpace?.id || !user) return;
     
     try {
-      setIsConnecting(true);
-     
+      console.log('🚀 Initializing space chat for:', currentSpace.id);
       
-      // Get conversation ID first (this is fast)
+      // ✅ CRITICAL FIX: Always use current space ID for conversation ID
       const convId = `space-${currentSpace.id}`;
-      setConversationId(convId);
       
-      // Load cached messages immediately for instant display
-      await loadMessagesFromCache(convId);
-     
+      // Update local state if different
+      if (conversationId !== convId) {
+        console.log('🔄 Updating conversation ID from', conversationId, 'to', convId);
+        setConversationId(convId);
+      }
       
-      // Connect to WebSocket in parallel (don't block UI)
-      const connectPromise = connectionStatus.connected 
-        ? Promise.resolve()
-        : connect(user.id);
+      // ✅ CRITICAL FIX: Force active conversation update AND load cache in parallel for speed
+      const [, cachedMessages] = await Promise.all([
+        // Force update active conversation
+        Promise.resolve(useChatStore.getState().forceUpdateActiveConversation(convId)),
+        // Load cache immediately in parallel
+        loadMessagesFromCache(convId)
+      ]);
       
-      // Join space chat in parallel
-      const joinPromise = joinSpaceChat(
-        currentSpace.id, 
-        currentSpace.name, 
-        currentSpace.communityId
-      );
+      console.log(`⚡ [ChatStore] Loaded ${cachedMessages.length} messages from cache in parallel`);
       
-      // Wait for both operations
-      await Promise.all([connectPromise, joinPromise]);
-      
-      
+      // Background operations - don't block UI
+      Promise.all([
+        // Connect to WebSocket if needed
+        connectionStatus.connected ? Promise.resolve() : connect(user.id),
+        // Join space chat
+        joinSpaceChat(currentSpace.id, currentSpace.name, currentSpace.communityId)
+      ]).then(() => {
+        console.log('✅ Space chat initialized successfully');
+      }).catch((error) => {
+        console.error('❌ Background chat initialization failed:', error);
+      });
       
     } catch (error) {
-    } finally {
-      setIsConnecting(false);
+      console.error('❌ Failed to initialize space chat:', error);
     }
   };
 
   const handleRefreshContent = async () => {
-    if (!currentSpace?.id) return;
+    if (!currentSpace?.id || !currentSpace?.communityId) return;
     
     setRefreshing(true);
     try {
       const contentType = getContentType();
-      await fetchSpaceContent(currentSpace.id, contentType);
+      await fetchSpaceContent({ 
+        spaceId: currentSpace.id, 
+        communityId: currentSpace.communityId, 
+        type: contentType 
+      });
     } catch (error) {
     } finally {
       setRefreshing(false);
@@ -292,7 +382,35 @@ export default function SpaceDetailScreen() {
   const canSendMessage = PermissionManager.canSendMessageInSpace(user, currentSpace);
   const canManageSpace = PermissionManager.canManageSpace(user, currentSpace);
   
-
+  // ✅ CRITICAL FIX: Override permission for owners and add debugging
+  const actualCanSendMessage = canSendMessage || isOwner || (currentSpace?.isJoined && currentSpace?.interactionType === 'chat');
+  
+  // ✅ CRITICAL FIX: Debounce permission debug logs
+  const [lastPermissionDebugTime, setLastPermissionDebugTime] = useState(0);
+  const debugPermissions = () => {
+    const now = Date.now();
+    if (now - lastPermissionDebugTime > 2000) { // Only log every 2 seconds
+      console.log('🔍 Permission Debug:', {
+        userId: user?.id,
+        spaceId: currentSpace?.id,
+        ownerId: currentSpace?.ownerId,
+        isOwner,
+        isJoined: currentSpace?.isJoined,
+        memberRole: currentSpace?.memberRole,
+        interactionType: currentSpace?.interactionType,
+        canSendMessage,
+        actualCanSendMessage
+      });
+      setLastPermissionDebugTime(now);
+    }
+  };
+  
+  // Call permission debug only when relevant values change
+  React.useEffect(() => {
+    if (currentSpace && user) {
+      debugPermissions();
+    }
+  }, [currentSpace?.id, currentSpace?.isJoined, actualCanSendMessage]);
 
   // 🚀 Fetch space content when currentSpace is available AND user has access
   useEffect(() => {
@@ -344,22 +462,30 @@ export default function SpaceDetailScreen() {
   };
 
   const handleSendMessage = async () => {
-    if (!chatMessage.trim() || !conversationId || !currentSpace) return;
+    if (!chatMessage.trim() || !conversationId || !currentSpace || !user) return;
 
+    console.log('🔍 USER DEBUG:', {
+      userId: user.id,
+      username: user.username,
+      fullName: user.fullName,
+      avatarUrl: user.avatarUrl
+    });
 
     try {
       // For space chat, send via WebSocket and create optimistic message
       if (currentSpace.interactionType === 'chat') {
-       
         
-        // Send via WebSocket using the new sendMessageToConversation method
-        // This will handle optimistic message creation automatically
-       
-        const optimisticId = sendMessageToConversation(conversationId, chatMessage.trim(), 'text');
+        // ✅ CRITICAL FIX: Provide all required user data for SQLite
+        const optimisticId = sendMessageToConversation({
+          conversationId,
+          content: chatMessage.trim(),
+          type: 'text',
+          senderId: user.id,
+          senderName: user.username || user.fullName || 'Unknown User',
+          senderAvatar: user.avatarUrl || ''
+        });
      
-        
         setChatMessage('');
-      
         
         // TODO: When backend space messaging is implemented, also send via API
         // await api.post(`/communities/${currentSpace.communityId}/spaces/${currentSpace.id}/messages`, {
@@ -367,13 +493,12 @@ export default function SpaceDetailScreen() {
         //   type: 'text'
         // });
       } else {
-       
         // Fallback for non-space conversations
         await sendMessage(chatMessage.trim(), 'text');
         setChatMessage('');
       }
     } catch (error) {
- 
+      console.error('❌ Send message error:', error);
       Alert.alert('Error', 'Failed to send message. Please try again.');
     }
   };
@@ -396,7 +521,11 @@ export default function SpaceDetailScreen() {
       setShowCreatePost(false);
       
       // Refresh content
-      await fetchSpaceContent(currentSpace.id);
+      await fetchSpaceContent({ 
+        spaceId: currentSpace.id, 
+        communityId: currentSpace.communityId, 
+        type: 'posts' 
+      });
       
       Alert.alert('Success', 'Post created successfully!');
     } catch (error) {
@@ -405,7 +534,23 @@ export default function SpaceDetailScreen() {
   };
 
   const handleTypingStart = () => {
-    if (conversationId) {
+    console.log('🔍 TYPING START DEBUG:', {
+      conversationId,
+      connected: connectionStatus.connected,
+      actualCanSendMessage,
+      isOwner,
+      userId: user?.id
+    });
+    
+    if (conversationId && connectionStatus.connected && actualCanSendMessage) {
+      // Only set active conversation once when starting typing
+      const currentActiveId = useChatStore.getState().activeConversationId;
+      if (currentActiveId !== conversationId) {
+        console.log('🔄 Setting active conversation for typing:', conversationId);
+        useChatStore.getState().setActiveConversation(conversationId);
+      }
+      
+      console.log('📝 Starting typing indicator...');
       useChatStore.getState().startTyping();
       
       // Clear any existing timeout
@@ -413,17 +558,23 @@ export default function SpaceDetailScreen() {
         clearTimeout(typingTimeout);
       }
       
-      // Set a timeout to stop typing after 3 seconds of inactivity
+      // Set a timeout to stop typing after 2 seconds of inactivity
       const timeout = setTimeout(() => {
         handleTypingStop();
-      }, 3000);
+      }, 2000);
       
       setTypingTimeout(timeout);
+    } else {
+      console.log('❌ Cannot start typing:', {
+        hasConversationId: !!conversationId,
+        isConnected: connectionStatus.connected,
+        canSend: actualCanSendMessage
+      });
     }
   };
 
   const handleTypingStop = () => {
-    if (conversationId) {
+    if (conversationId && connectionStatus.connected) {
       useChatStore.getState().stopTyping();
       
       // Clear timeout
@@ -676,7 +827,7 @@ export default function SpaceDetailScreen() {
                         <VStack className="justify-center items-center py-12">
                           <MaterialIcons name="chat-bubble-outline" size={64} color="#9CA3AF" />
                           <Text className="mt-4 text-lg font-semibold text-gray-900">
-                            No messages yet
+                            No messages yetss
                           </Text>
                           <Text className="mt-2 text-center text-gray-600">
                             Be the first to start a conversation in this space.
@@ -718,31 +869,39 @@ export default function SpaceDetailScreen() {
                   
                   <TextInput
                     className="flex-1 border border-gray-300 rounded-full px-4 py-2 max-h-20"
-                    placeholder={canSendMessage ? "Type a message..." : "Join space to send messages"}
+                    placeholder={actualCanSendMessage ? "Type a message..." : "Join space to send messages"}
                     value={chatMessage}
                     onChangeText={(text) => {
                       setChatMessage(text);
-                      handleTypingStart();
+                      // Only trigger typing when actually typing (not deleting to empty)
+                      if (text.length > 0 && connectionStatus.connected && actualCanSendMessage) {
+                        handleTypingStart();
+                      }
                     }}
-                    onFocus={handleTypingStart}
+                    onFocus={() => {
+                      // Start typing indicator when focusing if there's content
+                      if (chatMessage.length > 0 && connectionStatus.connected && actualCanSendMessage) {
+                        handleTypingStart();
+                      }
+                    }}
                     onBlur={handleTypingStop}
                     multiline={true}
                     textAlignVertical="center"
-                    editable={connectionStatus.connected && canSendMessage}
+                    editable={connectionStatus.connected && actualCanSendMessage}
                   />
                   <TouchableOpacity 
                     className={`w-10 h-10 rounded-full items-center justify-center ${
-                      chatMessage.trim() && connectionStatus.connected && canSendMessage
+                      chatMessage.trim() && connectionStatus.connected && actualCanSendMessage
                         ? 'bg-blue-500' 
                         : 'bg-gray-300'
                     }`}
                     onPress={handleSendMessage}
-                    disabled={!chatMessage.trim() || !connectionStatus.connected || !canSendMessage}
+                    disabled={!chatMessage.trim() || !connectionStatus.connected || !actualCanSendMessage}
                   >
                     <MaterialIcons 
                       name="send" 
                       size={20} 
-                      color={chatMessage.trim() && connectionStatus.connected && canSendMessage ? 'white' : 'gray'} 
+                      color={chatMessage.trim() && connectionStatus.connected && actualCanSendMessage ? 'white' : 'gray'} 
                     />
                   </TouchableOpacity>
                 </HStack>
@@ -779,9 +938,9 @@ export default function SpaceDetailScreen() {
                     </TouchableOpacity>
                   )}
 
-                  {spaceContent && spaceContent.length > 0 ? (
+                  {spaceContents[currentSpace?.id] && spaceContents[currentSpace.id].length > 0 ? (
                     <VStack space="md">
-                      {spaceContent.map((item: any, index: number) => (
+                      {spaceContents[currentSpace.id].map((item: any, index: number) => (
                         <Box key={index} className="bg-white border border-gray-200 rounded-lg p-4 shadow-sm">
                           {/* Display content based on space type */}
                           {currentSpace.interactionType === 'chat' ? (

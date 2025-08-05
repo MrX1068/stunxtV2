@@ -4,6 +4,7 @@ import { socketService, SocketMessage, TypingIndicator, ConnectionStatus } from 
 import { useApiStore } from './api';
 import { useAuth } from './auth';
 import { messageCache } from './messageCache';
+import { sqliteMessageCache } from './sqliteMessageCache'; // ✅ CRITICAL FIX: Enhanced SQLite caching
 
 export interface ChatConversation {
   id: string;
@@ -80,7 +81,14 @@ export interface ChatActions {
   // Messages
   fetchMessages: (conversationId: string, limit?: number, before?: string) => Promise<void>;
   sendMessage: (content: string, type?: 'text' | 'image' | 'file') => string | null;
-  sendMessageToConversation: (conversationId: string, content: string, type?: 'text' | 'image' | 'file') => string | null;
+  sendMessageToConversation: (messageData: {
+    conversationId: string;
+    content: string;
+    type?: 'text' | 'image' | 'file';
+    senderId: string;
+    senderName: string;
+    senderAvatar?: string;
+  }) => string | null;
   resendMessage: (optimisticId: string) => void;
   deleteMessage: (messageId: string) => Promise<void>;
   editMessage: (messageId: string, newContent: string) => Promise<void>;
@@ -105,6 +113,8 @@ export interface ChatActions {
   
   // Connection management
   refreshConnectionStatus: () => void;
+  forceUpdateActiveConversation: (conversationId: string) => void; // ✅ NEW: Force conversation update
+  forceClearChatData: () => void; // ✅ NEW: Force clear all chat data for clean switches
   
   // Space integration helpers
   syncSpaceMessages: (spaceId: string, spaceMessages: any[]) => Promise<void>;
@@ -173,33 +183,66 @@ export const useChatStore = create<ChatStore>()(
           });
         },
         onMessage: (message: SocketMessage) => {
-        
+          console.log('📨 [ChatStore] Received message:', { 
+            id: message.id, 
+            senderId: message.senderId, 
+            senderName: message.senderName,
+            content: message.content?.substring(0, 50) 
+          });
           
-          // 🚀 Professional Message Enhancement - Ensure senderName is properly set
+          // ✅ CRITICAL FIX: Enhanced message processing with proper user data and fallbacks
           const enhancedMessage: SocketMessage = {
             ...message,
-            senderName: message.senderName || 'Anonymous User'
+            // Ensure senderName is never empty - use multiple fallbacks
+            senderName: message.senderName || 
+                       (message.sender?.username) || 
+                       (message.sender?.fullName) || 
+                       (message.sender?.displayName) ||
+                       `User ${message.senderId?.substring(0, 8)}` || 
+                       'Anonymous User',
+            // ✅ CRITICAL FIX: Ensure timestamp is valid
+            timestamp: message.timestamp || new Date().toISOString()
           };
-          
-          // If senderName is empty/null but we have senderId, we should fetch user info
-          // For now, we'll use Anonymous User as fallback
-          if (!enhancedMessage.senderName || enhancedMessage.senderName.trim() === '') {
-            enhancedMessage.senderName = 'Anonymous User';
-          }
           
           set((state) => {
             const { conversationId } = enhancedMessage;
             if (!state.messages[conversationId]) {
               state.messages[conversationId] = [];
             }
-            // Avoid duplicates
-            if (!state.messages[conversationId].some(m => m.id === enhancedMessage.id)) {
+            
+            // ✅ PROFESSIONAL DEDUPLICATION: Check for both server ID and optimistic ID
+            const existingMessage = state.messages[conversationId].find(m => 
+              m.id === enhancedMessage.id || 
+              (m.optimisticId && m.optimisticId === enhancedMessage.optimisticId) ||
+              (enhancedMessage.optimisticId && m.id === enhancedMessage.optimisticId)
+            );
+            
+            if (!existingMessage) {
               state.messages[conversationId].push(enhancedMessage);
+              console.log('✅ [ChatStore] Added new message to state');
+            } else {
+              // ✅ PROFESSIONAL UPDATE: Replace optimistic message with server message
+              const msgIndex = state.messages[conversationId].findIndex(m => 
+                m.id === enhancedMessage.id || 
+                m.optimisticId === enhancedMessage.optimisticId ||
+                (enhancedMessage.optimisticId && m.id === enhancedMessage.optimisticId)
+              );
+              if (msgIndex !== -1) {
+                state.messages[conversationId][msgIndex] = enhancedMessage;
+                console.log('🔄 [ChatStore] Updated existing message with server data');
+              } else {
+                console.log('⚠️ [ChatStore] Duplicate message ignored');
+              }
             }
           });
           
           // Cache the enhanced message immediately for persistence
           messageCache.addMessageToCache(enhancedMessage.conversationId, enhancedMessage);
+          
+          // ✅ CRITICAL FIX: Also cache in SQLite for instant access
+          sqliteMessageCache.addOptimisticMessage(enhancedMessage).catch(error => {
+            console.error('Failed to cache message in SQLite:', error);
+          });
         },
         onMessageSent: (data: { optimisticId: string; message: any; success: boolean }) => {
         
@@ -246,8 +289,15 @@ export const useChatStore = create<ChatStore>()(
             }
           });
         },
-        // 🚀 Professional Typing Indicator Handler
+        // ✅ CRITICAL FIX: Enhanced typing indicator handler
         onTyping: (data: TypingIndicator, isTyping: boolean) => {
+          console.log('👀 [ChatStore] Typing indicator:', { 
+            userId: data.userId, 
+            userName: data.userName, 
+            isTyping, 
+            conversationId: data.conversationId 
+          });
+          
           set((state) => {
             const { conversationId } = data;
             if (!state.typingUsers[conversationId]) {
@@ -256,14 +306,17 @@ export const useChatStore = create<ChatStore>()(
             
             if (isTyping) {
               // Add user to typing list if not already there
-              if (!state.typingUsers[conversationId].some(u => u.userId === data.userId)) {
+              const existingIndex = state.typingUsers[conversationId].findIndex(u => u.userId === data.userId);
+              if (existingIndex === -1) {
                 state.typingUsers[conversationId].push(data);
+                console.log(`✅ [ChatStore] Added ${data.userName} to typing list`);
               }
             } else {
               // Remove user from typing list
               state.typingUsers[conversationId] = state.typingUsers[conversationId].filter(
                 u => u.userId !== data.userId
               );
+              console.log(`✅ [ChatStore] Removed ${data.userName} from typing list`);
             }
           });
         },
@@ -324,16 +377,19 @@ export const useChatStore = create<ChatStore>()(
         state.activeConversation = conversation || null;
         state.replyingTo = null;
         state.selectedMessages = [];
+        // ✅ CRITICAL FIX: Don't clear messages here - let cache loading handle it
+        // This prevents race conditions and preserves instant loading
+        if (!state.messages[conversationId]) {
+          state.messages[conversationId] = [];
+        }
       });
 
       // Join conversation room
       socketService.joinConversation(conversationId);
       
-      // Fetch messages if not already loaded
-      if (!get().messages[conversationId]) {
-        get().fetchMessages(conversationId);
-      }
-
+      // ✅ CRITICAL FIX: Don't auto-fetch if cache loading is being handled elsewhere
+      // This prevents duplicate network requests and delays
+      
       // Mark messages as read
       const messages = get().messages[conversationId] || [];
       const unreadMessages = messages.filter(m => m.status !== 'read');
@@ -593,58 +649,60 @@ export const useChatStore = create<ChatStore>()(
 
       // Cache the optimistic message immediately for persistence
       messageCache.addMessageToCache(activeConversationId, optimisticMessage);
+      
+      // ✅ CRITICAL FIX: Cache in SQLite for instant loading
+      sqliteMessageCache.addOptimisticMessage(optimisticMessage).catch(error => {
+        console.error('Failed to cache optimistic message in SQLite:', error);
+      });
 
       return optimisticId;
     },
 
-    sendMessageToConversation: (conversationId: string, content: string, type = 'text' as const) => {
- 
+    sendMessageToConversation: (messageData: {
+      conversationId: string;
+      content: string;
+      type?: 'text' | 'image' | 'file';
+      senderId: string;
+      senderName: string;
+      senderAvatar?: string;
+    }) => {
+      const { conversationId, content, type = 'text', senderId, senderName, senderAvatar } = messageData;
 
       if (!conversationId || !content.trim()) {
         return null;
       }
 
-      // Get current user info for optimistic message from auth store
-      const currentUserId = socketService.getCurrentUserId();
-      
-      // 🚀 Professional User Info Retrieval - Get actual user details
-      let currentUserName = 'You'; // Fallback
-      try {
-        // Access auth store to get current user information (sync import)
-        const { useAuthStore } = require('./auth');
-        const authState = useAuthStore.getState();
-        const currentUser = authState.user;
-        if (currentUser) {
-          currentUserName = currentUser.username || currentUser.fullName || 'You';
-        }
-      } catch (error) {
-      }
+      // ✅ CRITICAL FIX: Use provided user information instead of fetching
+      const optimisticId = `optimistic_${Date.now()}_${Math.random()}`;
 
-     
-
-      // Send message directly to the specified conversation
-      const optimisticId = socketService.sendMessage({
+      // Send message with complete user context
+      socketService.sendMessage({
         content,
         type,
-        senderId: currentUserId, // Use current user ID
-        senderName: currentUserName, // Use current user name
-        senderAvatar: '',
+        senderId, // Use provided sender ID
+        senderName, // Use provided sender name
+        senderAvatar: senderAvatar || '',
         conversationId,
-        replyTo: undefined, // No reply support for direct conversation messages
+        replyTo: undefined,
       });
 
-      // Create optimistic message for immediate UI update with correct sender info
+      // Create optimistic message with correct sender info for immediate UI update
+      const now = new Date();
       const optimisticMessage: SocketMessage = {
         id: optimisticId,
         content,
         type,
-        senderId: currentUserId, // ✅ Set correct sender ID to prevent UI glitch!
-        senderName: currentUserName,
-        senderAvatar: '',
+        senderId, // ✅ Use provided sender ID to prevent anonymity
+        senderName, // ✅ Use provided sender name 
+        senderAvatar: senderAvatar || '',
         conversationId,
-        timestamp: new Date().toISOString(),
+        timestamp: now.toISOString(), // ✅ CRITICAL FIX: Ensure proper timestamp format
         optimisticId,
         status: 'sending',
+        // ✅ Additional fields that might be expected by SQLite
+        replyTo: undefined,
+        edited: false,
+        editedAt: undefined
       };
 
     
@@ -665,6 +723,11 @@ export const useChatStore = create<ChatStore>()(
 
       // Cache the optimistic message immediately for persistence
       messageCache.addMessageToCache(conversationId, optimisticMessage);
+      
+      // ✅ CRITICAL FIX: Cache in SQLite for instant loading
+      sqliteMessageCache.addOptimisticMessage(optimisticMessage).catch(error => {
+        console.error('Failed to cache optimistic message in SQLite:', error);
+      });
 
       return optimisticId;
     },
@@ -810,37 +873,101 @@ export const useChatStore = create<ChatStore>()(
       });
     },
 
-    // Space integration helpers
-    syncSpaceMessages: async (spaceId: string, spaceMessages: any[]) => {
-      const conversationId = `space-${spaceId}`;
-      
-
-      // Convert incoming space messages to the standard chat message format
-      const incomingChatMessages: SocketMessage[] = spaceMessages.map((msg, index) => ({
-        id: msg.id || `space_msg_${index}`,
-        content: msg.content || msg.message || '',
-        type: 'text' as const,
-        senderId: msg.senderId || msg.author?.id || msg.sender?.id || '',
-        senderName: msg.senderName || msg.author?.username || msg.sender?.username || 'Anonymous',
-        senderAvatar: msg.senderAvatar || msg.author?.avatarUrl || msg.sender?.avatarUrl,
-        conversationId,
-        timestamp: msg.createdAt || msg.timestamp || new Date().toISOString(),
-        status: 'delivered' as const,
-      }));
-
-      // Use smart merge to prevent overwriting newer messages
-      await messageCache.mergeConversationMessages(conversationId, incomingChatMessages);
-
-      // Update in-memory state by loading from cache
-      // This ensures UI consistency and prevents race conditions
-      const cachedMessages = await messageCache.getConversationMessages(conversationId);
-      
+    // ✅ CRITICAL FIX: Force active conversation update to fix conversation ID persistence
+    forceUpdateActiveConversation: (conversationId: string) => {
+      console.log(`🔄 [ChatStore] Force updating active conversation to: ${conversationId}`);
+      const conversation = get().conversations.find(c => c.id === conversationId);
       set((state) => {
-        state.messages[conversationId] = cachedMessages;
+        state.activeConversationId = conversationId;
+        state.activeConversation = conversation || null;
+        // Initialize messages array if it doesn't exist
+        if (!state.messages[conversationId]) {
+          state.messages[conversationId] = [];
+        }
+      });
+      
+      // Join conversation room
+      socketService.joinConversation(conversationId);
+      console.log(`✅ [ChatStore] Active conversation forcefully updated to: ${conversationId}`);
+    },
+
+    // ✅ CRITICAL FIX: Force clear all chat data for clean interaction type switches
+    forceClearChatData: () => {
+      console.log('🧹 [ChatStore] Force clearing all chat data for clean switch');
+      set((state) => {
+        // ✅ INSTANT CLEAR: Professional approach - clear UI immediately
+        state.messages = {};
+        state.activeConversationId = null;
+        state.activeConversation = null;
+        state.typingUsers = {};
+        state.selectedMessages = [];
+        state.replyingTo = null;
+        state.isLoadingMessages = false; // Clear loading states
+        state.error = null; // Clear errors
       });
     },
 
-    clearSpaceChatState: async (spaceId: string) => {
+  // Space integration helpers
+  syncSpaceMessages: async (spaceId: string, spaceMessages: any[]) => {
+    const conversationId = `space-${spaceId}`;
+    
+    console.log(`🔄 [ChatStore] Syncing ${spaceMessages.length} messages for space ${spaceId}`);
+    console.log(`🎯 [ChatStore] Target conversation ID: ${conversationId}`);
+    console.log(`📊 [ChatStore] Current active conversation: ${get().activeConversationId}`);
+    
+    // Convert incoming space messages to the standard chat message format
+    const incomingChatMessages: SocketMessage[] = spaceMessages.map((msg, index) => ({
+      id: msg.id || `space_msg_${index}`,
+      content: msg.content || msg.message || '',
+      type: 'text' as const,
+      senderId: msg.senderId || msg.author?.id || msg.sender?.id || '',
+      senderName: msg.senderName || msg.author?.username || msg.sender?.username || 'Anonymous',
+      senderAvatar: msg.senderAvatar || msg.author?.avatarUrl || msg.sender?.avatarUrl,
+      conversationId,
+      timestamp: msg.createdAt || msg.timestamp || new Date().toISOString(),
+      status: 'delivered' as const,
+    }));
+
+    try {
+      // ✅ PROFESSIONAL APPROACH: Sync to cache first (background operation)
+      await sqliteMessageCache.batchSyncMessages(conversationId, incomingChatMessages);
+      
+      // ✅ CRITICAL FIX: Only update UI state if this conversation is currently active
+      // This prevents stale data contamination from background syncing
+      const currentState = get();
+      if (currentState.activeConversationId === conversationId) {
+        // Load fresh data from cache (this ensures consistency)
+        const { messages: cachedMessages } = await sqliteMessageCache.getMessages(conversationId, 100);
+        
+        set((state) => {
+          // ✅ PROFESSIONAL DEDUPLICATION: Replace entire message array
+          state.messages[conversationId] = cachedMessages;
+        });
+        console.log(`✅ [ChatStore] Updated ACTIVE conversation ${conversationId} with ${cachedMessages.length} messages from sync`);
+      } else {
+        // ✅ BACKGROUND SYNC: Don't update UI for inactive conversations
+        console.log(`📦 [ChatStore] Background synced ${incomingChatMessages.length} messages for INACTIVE conversation ${conversationId} (active: ${currentState.activeConversationId})`);
+      }
+      
+      // Also update legacy cache for backward compatibility
+      await messageCache.mergeConversationMessages(conversationId, incomingChatMessages);
+      
+    } catch (error) {
+      console.error('❌ [ChatStore] Failed to sync via SQLite cache:', error);
+      
+      // Fallback to legacy cache
+      await messageCache.mergeConversationMessages(conversationId, incomingChatMessages);
+      
+      // Only update UI if conversation is active
+      const currentState = get();
+      if (currentState.activeConversationId === conversationId) {
+        const cachedMessages = await messageCache.getConversationMessages(conversationId);
+        set((state) => {
+          state.messages[conversationId] = cachedMessages;
+        });
+      }
+    }
+  },    clearSpaceChatState: async (spaceId: string) => {
       const conversationId = `space-${spaceId}`;
       
       // Clear from secure cache
@@ -868,26 +995,98 @@ export const useChatStore = create<ChatStore>()(
      
     },
 
-    // Load messages from cache when entering a conversation
-    loadMessagesFromCache: async (conversationId: string) => {
-      try {
-        const cachedMessages = await messageCache.getConversationMessages(conversationId);
-        
-        set((state) => {
-          state.messages[conversationId] = cachedMessages;
-        });
-        
-   
-        
-        return cachedMessages;
-      } catch (error) {
-       
+  // Load messages from cache when entering a conversation
+  loadMessagesFromCache: async (conversationId: string) => {
+    try {
+      console.log(`🔄 [ChatStore] Loading messages from cache for ${conversationId}`);
+      
+      // ✅ CRITICAL FIX: Validate conversation ID and ensure proper state isolation
+      if (!conversationId || conversationId === 'undefined') {
+        console.error(`❌ [ChatStore] Invalid conversation ID: ${conversationId}`);
         return [];
       }
-    },
+      
+      // ✅ CRITICAL OPTIMIZATION: Skip cache if database not ready to avoid delays
+      if (!sqliteMessageCache.isDatabaseReady()) {
+        console.log(`⚠️ [ChatStore] Database not ready, skipping cache load for ${conversationId}`);
+        return [];
+      }
+      
+      // ✅ CRITICAL FIX: Check if conversation is still active before starting
+      const currentState = get();
+      if (currentState.activeConversationId !== conversationId) {
+        console.log(`🚫 [ChatStore] Conversation changed during load, aborting: ${currentState.activeConversationId} !== ${conversationId}`);
+        return [];
+      }
+      
+      // ✅ CRITICAL FIX: Load from cache FIRST, then update state atomically
+      const cacheStart = Date.now();
+      const { messages: sqliteMessages } = await sqliteMessageCache.getMessages(conversationId, 100);
+      const cacheTime = Date.now() - cacheStart;
+      
+      if (sqliteMessages.length > 0) {
+        console.log(`⚡ [ChatStore] Loaded ${sqliteMessages.length} messages from SQLite cache in ${cacheTime}ms`);
+        
+        // ✅ CRITICAL FIX: Double-check conversation is still active after async operation
+        const finalState = get();
+        if (finalState.activeConversationId === conversationId) {
+          set((state) => {
+            // ✅ PROFESSIONAL DEDUPLICATION: Clear existing messages first to prevent duplicates
+            state.messages[conversationId] = sqliteMessages;
+          });
+          console.log(`✅ [ChatStore] Updated active conversation ${conversationId} with ${sqliteMessages.length} messages`);
+        } else {
+          console.log(`⚠️ [ChatStore] Skipped update - conversation changed: ${finalState.activeConversationId} !== ${conversationId}`);
+        }
+        
+        return sqliteMessages;
+      }
+      
+      // Fallback to legacy cache if SQLite cache is empty
+      console.log(`📁 [ChatStore] SQLite cache empty, falling back to legacy cache`);
+      const legacyCachedMessages = await messageCache.getConversationMessages(conversationId);
+      
+      if (legacyCachedMessages.length > 0) {
+        // Check active conversation again before updating
+        const finalState = get();
+        if (finalState.activeConversationId === conversationId) {
+          set((state) => {
+            state.messages[conversationId] = legacyCachedMessages;
+          });
+          console.log(`✅ [ChatStore] Loaded ${legacyCachedMessages.length} legacy messages`);
+          
+          // Migrate to SQLite in background
+          sqliteMessageCache.batchSyncMessages(conversationId, legacyCachedMessages).catch(console.error);
+        }
+        
+        return legacyCachedMessages;
+      }
+      
+      // ✅ CRITICAL FIX: Only clear messages if no cache is found AND conversation is still active
+      const finalState = get();
+      if (finalState.activeConversationId === conversationId) {
+        console.log(`📭 [ChatStore] No cached messages found for ${conversationId}, clearing state`);
+        set((state) => {
+          state.messages[conversationId] = [];
+        });
+      }
+      return [];
+      
+    } catch (error) {
+      console.error(`❌ [ChatStore] Failed to load messages from cache for ${conversationId}:`, error);
+      // Clear on error only if conversation is still active
+      const finalState = get();
+      if (finalState.activeConversationId === conversationId) {
+        set((state) => {
+          state.messages[conversationId] = [];
+        });
+      }
+      return [];
+    }
+  },
 
-    // 🚀 Professional Message Retry System - Handle DB save delays and failures
-    retryFailedMessages: async (conversationId?: string) => {
+  // 🚀 Professional Message Retry System - Handle DB save delays and failures
+  retryFailedMessages: async (conversationId?: string) => {
       const state = get();
       
       // Get conversations to check for failed messages

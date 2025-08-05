@@ -16,6 +16,15 @@ export interface SocketMessage {
   replyTo?: string;
   edited?: boolean;
   editedAt?: string;
+  // ✅ ENHANCEMENT: Optional sender object for enhanced user data
+  sender?: {
+    id: string;
+    username?: string;
+    fullName?: string;
+    displayName?: string;
+    avatarUrl?: string;
+    avatar?: string;
+  };
 }
 
 export interface TypingIndicator {
@@ -198,12 +207,23 @@ class SocketService {
       this.handleMessageStatusUpdate(data);
     });
 
-    this.socket.on('typing', (data: TypingIndicator) => {
-      this.handleTypingIndicator(data, true);
-    });
-
-    this.socket.on('stop_typing', (data: TypingIndicator) => {
-      this.handleTypingIndicator(data, false);
+    // ✅ CRITICAL FIX: Updated typing event listeners to match backend
+    this.socket.on('user_typing', (data: { 
+      conversationId: string; 
+      userId: string; 
+      userName?: string;
+      isTyping: boolean; 
+      timestamp: string;
+    }) => {
+      console.log('👀 [Socket] Typing event received:', data);
+      
+      const typingIndicator: TypingIndicator = {
+        userId: data.userId,
+        userName: data.userName || `User ${data.userId.substring(0, 8)}`,
+        conversationId: data.conversationId,
+      };
+      
+      this.handleTypingIndicator(typingIndicator, data.isTyping);
     });
 
     this.socket.on('user_online', (data: { userId: string; status: 'online' | 'offline' }) => {

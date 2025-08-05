@@ -41,7 +41,8 @@
           "faceIDPermission": "Allow StunxtV2 to access your Face ID biometric data for secure authentication."
         }
       ],
-      "expo-notifications"
+      "expo-notifications",
+      "expo-sqlite"
     ],
     "experiments": {
       "typedRoutes": true
