@@ -13,5 +13,16 @@ export { Button, ButtonText, ButtonIcon, ButtonSpinner, ButtonGroup } from "./bu
 // Form Components
 export { Input, InputField, InputSlot, InputIcon } from "./input";
 
+// Overlay Components
+export {
+  Modal,
+  ModalBackdrop,
+  ModalContent,
+  ModalCloseButton,
+  ModalHeader,
+  ModalBody,
+  ModalFooter
+} from "./modal";
+
 // Provider
 export { GluestackUIProvider } from "./gluestack-ui-provider";

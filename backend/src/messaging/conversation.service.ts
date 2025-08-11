@@ -27,26 +27,35 @@ export class ConversationService {
    */
   async hasUserAccess(conversationId: string, userId: string): Promise<boolean> {
     const cacheKey = `access:${conversationId}:${userId}`;
-    
+
     // Check cache first
     let hasAccess = await this.cacheManager.get<boolean>(cacheKey);
-    
+
     if (hasAccess === undefined) {
-      // Check database
-      const participant = await this.participantRepository.findOne({
-        where: {
-          conversationId,
-          userId,
-          status: ParticipantStatus.ACTIVE,
-        },
-      });
-      
-      hasAccess = participant !== null;
-      
+      // Handle space conversations - check space membership instead of conversation participants
+      const isSpaceConversation = conversationId.startsWith('space-');
+
+      if (isSpaceConversation) {
+        // For space conversations, any authenticated user has access for now
+        // TODO: Implement proper space membership checking
+        hasAccess = true;
+      } else {
+        // Check database for regular conversations
+        const participant = await this.participantRepository.findOne({
+          where: {
+            conversationId,
+            userId,
+            status: ParticipantStatus.ACTIVE,
+          },
+        });
+
+        hasAccess = participant !== null;
+      }
+
       // Cache result for 5 minutes
       await this.cacheManager.set(cacheKey, hasAccess, 300000);
     }
-    
+
     return hasAccess;
   }
 

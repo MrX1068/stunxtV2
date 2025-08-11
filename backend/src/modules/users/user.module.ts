@@ -12,9 +12,11 @@ import { UserFollow } from '../../shared/entities/user-follow.entity';
 import { UserBlock } from '../../shared/entities/user-block.entity';
 import { UserSession } from '../../shared/entities/user-session.entity';
 import { ImageTransformService } from '../../shared/services/image-transform.service';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
+    AuthModule, // Import AuthModule for JwtAuthGuard dependencies
     TypeOrmModule.forFeature([
       User,
       UserProfile,
@@ -24,6 +26,7 @@ import { ImageTransformService } from '../../shared/services/image-transform.ser
       UserBlock,
       UserSession,
     ]),
+    AuthModule
     // Note: Using global Redis cache from MessagingModule (isGlobal: true)
   ],
   controllers: [UserController],

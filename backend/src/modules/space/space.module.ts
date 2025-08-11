@@ -15,9 +15,11 @@ import { CommunityMemberService } from '../community/community-member.service';
 import { CommunityAuditService } from '../community/community-audit.service';
 import { MessagingModule } from '../../messaging/messaging.module';
 import { PostsModule } from '../../posts/posts.module';
+import { AuthModule } from '../auth/auth.module';
 
 @Module({
   imports: [
+    AuthModule, // Import AuthModule for JwtAuthGuard dependencies
     TypeOrmModule.forFeature([
       Space,
       SpaceMember,

@@ -67,6 +67,12 @@ class SocketService {
   private handleMessageSentConfirmation: (data: { optimisticId: string; message: any; success: boolean }) => void = () => {};
   private handleMessageSendError: (data: { optimisticId: string; error: string; success: boolean }) => void = () => {};
 
+  // ✅ NEW: Community-related event handlers
+  private handleCommunityUpdate: (data: { communityId: string; updates: any }) => void = () => {};
+  private handleSpaceUpdate: (data: { spaceId: string; communityId: string; updates: any }) => void = () => {};
+  private handleMemberJoined: (data: { communityId: string; member: any }) => void = () => {};
+  private handleMemberLeft: (data: { communityId: string; userId: string }) => void = () => {};
+
   async connect(userId: string): Promise<void> {
     if (this.socket?.connected) {
       return;
@@ -229,6 +235,23 @@ class SocketService {
     this.socket.on('user_online', (data: { userId: string; status: 'online' | 'offline' }) => {
       this.handleUserStatusUpdate(data);
     });
+
+    // ✅ NEW: Community-related events
+    this.socket.on('community_updated', (data: { communityId: string; updates: any }) => {
+      this.handleCommunityUpdate(data);
+    });
+
+    this.socket.on('space_updated', (data: { spaceId: string; communityId: string; updates: any }) => {
+      this.handleSpaceUpdate(data);
+    });
+
+    this.socket.on('member_joined', (data: { communityId: string; member: any }) => {
+      this.handleMemberJoined(data);
+    });
+
+    this.socket.on('member_left', (data: { communityId: string; userId: string }) => {
+      this.handleMemberLeft(data);
+    });
   }
 
   private startHeartbeat(): void {
@@ -359,6 +382,11 @@ class SocketService {
     onUserStatus?: (data: { userId: string; status: 'online' | 'offline' }) => void;
     onMessageSent?: (data: { optimisticId: string; message: any; success: boolean }) => void;
     onMessageError?: (data: { optimisticId: string; error: string; success: boolean }) => void;
+    // ✅ NEW: Community-related handlers
+    onCommunityUpdate?: (data: { communityId: string; updates: any }) => void;
+    onSpaceUpdate?: (data: { spaceId: string; communityId: string; updates: any }) => void;
+    onMemberJoined?: (data: { communityId: string; member: any }) => void;
+    onMemberLeft?: (data: { communityId: string; userId: string }) => void;
   }): void {
     if (handlers.onConnect) this.handleConnect = handlers.onConnect;
     if (handlers.onDisconnect) this.handleDisconnect = handlers.onDisconnect;
@@ -370,11 +398,24 @@ class SocketService {
     if (handlers.onUserStatus) this.handleUserStatusUpdate = handlers.onUserStatus;
     if (handlers.onMessageSent) this.handleMessageSentConfirmation = handlers.onMessageSent;
     if (handlers.onMessageError) this.handleMessageSendError = handlers.onMessageError;
+    // ✅ NEW: Community-related handlers
+    if (handlers.onCommunityUpdate) this.handleCommunityUpdate = handlers.onCommunityUpdate;
+    if (handlers.onSpaceUpdate) this.handleSpaceUpdate = handlers.onSpaceUpdate;
+    if (handlers.onMemberJoined) this.handleMemberJoined = handlers.onMemberJoined;
+    if (handlers.onMemberLeft) this.handleMemberLeft = handlers.onMemberLeft;
   }
 
   // ✅ Method to get current user ID for optimistic messages
   getCurrentUserId(): string {
     return this.currentUserId || '';
+  }
+
+  /**
+   * Get the current socket instance for direct use
+   * Used by chat services that need direct socket access
+   */
+  getSocket(): Socket | null {
+    return this.socket;
   }
 }
 

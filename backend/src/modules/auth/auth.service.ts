@@ -18,6 +18,7 @@ import { v4 as uuidv4 } from 'uuid';
 import { User, UserRole, UserStatus } from '../../shared/entities/user.entity';
 import { UserSessionService } from './user-session.service';
 import { LoginAttemptService } from './login-attempt.service';
+import { TokenBlacklistService } from './token-blacklist.service';
 import { OtpService } from './services/otp.service';
 import { EmailService } from './services/email.service';
 import { ResponseService } from '../../shared/services/response.service';
@@ -92,6 +93,7 @@ export class AuthService {
     private readonly configService: ConfigService,
     private readonly userSessionService: UserSessionService,
     private readonly loginAttemptService: LoginAttemptService,
+    private readonly tokenBlacklistService: TokenBlacklistService,
     private readonly otpService: OtpService,
     private readonly emailService: EmailService,
     private readonly responseService: ResponseService,
@@ -566,14 +568,45 @@ export class AuthService {
   }
 
   /**
-   * Logout user and invalidate session
+   * Logout user and invalidate session with token blacklisting
    */
-  async logout(sessionId: string, userId: string): Promise<void> {
+  async logout(sessionId: string, userId: string, accessToken?: string, refreshToken?: string): Promise<void> {
     try {
+      // Get session details before invalidation
+      const session = await this.userSessionService.findValidSession(sessionId, userId);
+
+      if (session) {
+        // Blacklist the current access token if provided
+        if (accessToken) {
+          await this.tokenBlacklistService.blacklistToken(
+            accessToken,
+            'access',
+            userId,
+            sessionId,
+            'User logout',
+            new Date(Date.now() + 15 * 60 * 1000) // 15 minutes (typical access token expiry)
+          );
+        }
+
+        // Blacklist the refresh token if provided
+        if (refreshToken) {
+          await this.tokenBlacklistService.blacklistToken(
+            refreshToken,
+            'refresh',
+            userId,
+            sessionId,
+            'User logout',
+            session.refreshTokenExpiresAt || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000) // 7 days
+          );
+        }
+      }
+
+      // Invalidate the session
       await this.userSessionService.invalidateSession(sessionId);
-    
+
+      this.logger.log(`User ${userId} logged out successfully, session ${sessionId} invalidated`);
     } catch (error) {
-     
+      this.logger.error('Logout failed:', error);
       throw new BadRequestException('Logout failed');
     }
   }
@@ -621,6 +654,12 @@ export class AuthService {
       await this.userRepository.update(userId, {
         passwordHash: hashedNewPassword,
       });
+
+      // Blacklist all user tokens (security measure)
+      await this.tokenBlacklistService.blacklistAllUserTokens(
+        userId,
+        'Password changed - security measure'
+      );
 
       // Invalidate all sessions except current one (force re-login on other devices)
       await this.userSessionService.invalidateUserSessions(userId);

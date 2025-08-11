@@ -14,9 +14,11 @@ import { Community } from '../shared/entities/community.entity';
 import { CommunityMember } from '../shared/entities/community-member.entity';
 import { Space } from '../shared/entities/space.entity';
 import { SpaceMember } from '../shared/entities/space-member.entity';
+import { AuthModule } from '../modules/auth/auth.module';
 
 @Module({
   imports: [
+    AuthModule, // Import AuthModule for JwtAuthGuard dependencies
     TypeOrmModule.forFeature([
       Post,
       PostComment,

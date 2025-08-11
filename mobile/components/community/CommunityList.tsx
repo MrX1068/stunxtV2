@@ -75,28 +75,30 @@ export function CommunityList({
   }, [communities, searchQuery, filterType, sortBy]);
   const renderHeader = () => (
     <VStack space="lg" className="px-6 pb-4">
-      <HStack className="justify-between items-center">
-        <VStack>
-          <Text size="2xl" className="font-bold text-gray-900 dark:text-gray-100">
-            {title}
-          </Text>
-          <Text size="sm" className="text-gray-500 dark:text-gray-400">
-            {filteredAndSortedCommunities.length} communities found
-          </Text>
-        </VStack>
-        {showCreateButton && (
-          <Button 
-            size="md" 
-            onPress={onCreateCommunity}
-            className="bg-primary-600 shadow-lg"
-          >
-            <HStack space="xs" className="items-center">
-              <MaterialIcons name="add" size={18} color="white" />
-              <ButtonText size="sm" className="text-white font-semibold">Create</ButtonText>
-            </HStack>
-          </Button>
-        )}
-      </HStack>
+      {title && (
+        <HStack className="justify-between items-center">
+          <VStack>
+            <Text size="2xl" className="font-bold text-gray-900 dark:text-gray-100">
+              {title}
+            </Text>
+            <Text size="sm" className="text-gray-500 dark:text-gray-400">
+              {filteredAndSortedCommunities.length} communities found
+            </Text>
+          </VStack>
+          {showCreateButton && (
+            <Button
+              size="md"
+              onPress={onCreateCommunity}
+              className="bg-primary-600 shadow-lg"
+            >
+              <HStack space="xs" className="items-center">
+                <MaterialIcons name="add" size={18} color="white" />
+                <ButtonText size="sm" className="text-white font-semibold">Create</ButtonText>
+              </HStack>
+            </Button>
+          )}
+        </HStack>
+      )}
       
       {showSearch && (
         <VStack space="md">

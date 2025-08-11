@@ -15,7 +15,7 @@ import { useTheme } from "@/providers/ThemeContext";
 import { useCommunities, useAuth } from "@/stores";
 import { PermissionManager } from "@/utils/permissions";
 import { ThemeToggleAdvanced } from "@/components/ThemeToggleAdvanced";
-import { 
+import {
   CommunityList,
 } from "@/components/community";
 import type { Community } from "@/stores";
@@ -27,7 +27,7 @@ export default function CommunitiesScreen() {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<'discover' | 'joined' | 'owned'>('discover');
   const [slideAnim] = useState(new Animated.Value(0));
-  
+
   const {
     communities,
     joinedCommunities,
@@ -44,7 +44,6 @@ export default function CommunitiesScreen() {
 
   // 🛡️ Professional Role-Based Permissions
   const canCreateCommunity = PermissionManager.canCreateCommunity(user);
-  
 
   // Fetch data on mount
   useEffect(() => {
@@ -73,7 +72,7 @@ export default function CommunitiesScreen() {
 
   const handleRefresh = async () => {
     clearCommunitiesErrors();
-    
+
     try {
       switch (activeTab) {
         case 'discover':
@@ -114,23 +113,23 @@ export default function CommunitiesScreen() {
   };
 
   const tabs = [
-    { 
-      id: 'discover' as const, 
-      label: 'Discover', 
+    {
+      id: 'discover' as const,
+      label: 'Discover',
       icon: 'explore' as const,
       count: communities.length,
       color: '#3B82F6'
     },
-    { 
-      id: 'joined' as const, 
-      label: 'Joined', 
+    {
+      id: 'joined' as const,
+      label: 'Joined',
       icon: 'group' as const,
       count: joinedCommunities.length,
       color: '#10B981'
     },
-    { 
-      id: 'owned' as const, 
-      label: 'Owned', 
+    {
+      id: 'owned' as const,
+      label: 'Owned',
       icon: 'star' as const,
       count: ownedCommunities.length,
       color: '#F59E0B'
@@ -180,7 +179,7 @@ export default function CommunitiesScreen() {
             variant="default"
           />
         );
-      
+
       case 'joined':
         return (
           <CommunityList
@@ -197,7 +196,7 @@ export default function CommunitiesScreen() {
             variant="compact"
           />
         );
-      
+
       case 'owned':
         return (
           <CommunityList
@@ -214,7 +213,7 @@ export default function CommunitiesScreen() {
             variant="featured"
           />
         );
-      
+
       default:
         return null;
     }
@@ -265,7 +264,7 @@ export default function CommunitiesScreen() {
               </Box>
             </>
           )}
-          
+
           {activeTab === 'joined' && (
             <>
               <Box className="flex-1 bg-emerald-50 dark:bg-emerald-900/20 rounded-xl p-4 border border-emerald-100 dark:border-emerald-800">
@@ -288,7 +287,7 @@ export default function CommunitiesScreen() {
               </Box>
             </>
           )}
-          
+
           {activeTab === 'owned' && (
             <>
               <Box className="flex-1 bg-amber-50 dark:bg-amber-900/20 rounded-xl p-4 border border-amber-100 dark:border-amber-800">
@@ -312,7 +311,7 @@ export default function CommunitiesScreen() {
             </>
           )}
         </HStack>
-        
+
         {/* Enhanced Tab Navigation */}
         <Box className="relative">
           <ScrollView
@@ -327,29 +326,29 @@ export default function CommunitiesScreen() {
                   variant={activeTab === tab.id ? "solid" : "outline"}
                   size="md"
                   onPress={() => setActiveTab(tab.id as any)}
-                  className={`${activeTab === tab.id 
-                    ? 'bg-primary-600 border-primary-600 shadow-lg' 
+                  className={`${activeTab === tab.id
+                    ? 'bg-primary-600 border-primary-600 shadow-lg'
                     : 'bg-white dark:bg-gray-800 border-gray-200 dark:border-gray-700 shadow-sm'
                   }`}
                 >
                   <HStack space="sm" className="items-center">
-                    <MaterialIcons 
-                      name={tab.icon as any} 
-                      size={18} 
-                      color={activeTab === tab.id ? '#FFFFFF' : isDark ? '#9CA3AF' : '#6B7280'} 
+                    <MaterialIcons
+                      name={tab.icon as any}
+                      size={18}
+                      color={activeTab === tab.id ? '#FFFFFF' : isDark ? '#9CA3AF' : '#6B7280'}
                     />
                     <VStack className="items-start">
-                      <ButtonText 
-                        size="sm" 
-                        className={`font-semibold ${activeTab === tab.id 
-                          ? 'text-white' 
+                      <ButtonText
+                        size="sm"
+                        className={`font-semibold ${activeTab === tab.id
+                          ? 'text-white'
                           : 'text-gray-700 dark:text-gray-300'
                         }`}
                       >
                         {tab.label}
                       </ButtonText>
-                      <Text size="xs" className={`${activeTab === tab.id 
-                        ? 'text-white/80' 
+                      <Text size="xs" className={`${activeTab === tab.id
+                        ? 'text-white/80'
                         : 'text-gray-500 dark:text-gray-400'
                       }`}>
                         {tab.count}
@@ -360,7 +359,7 @@ export default function CommunitiesScreen() {
               ))}
             </HStack>
           </ScrollView>
-          
+
           {/* Tab Indicator */}
           <Animated.View
             className="absolute bottom-0 h-1 bg-primary-600 rounded-full"
@@ -388,8 +387,8 @@ export default function CommunitiesScreen() {
             <Text size="sm" className="text-gray-500 mt-2 text-center">
               {communitiesError}
             </Text>
-            <Button 
-              variant="outline" 
+            <Button
+              variant="outline"
               className="mt-6 border-primary-300 bg-primary-50"
               onPress={handleRefresh}
             >

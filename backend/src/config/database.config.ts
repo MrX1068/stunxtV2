@@ -8,6 +8,9 @@ export const databaseConfig = () => {
     retryAttempts: parseInt(process.env.DATABASE_RETRY_ATTEMPTS || '3', 10),
     retryDelay: parseInt(process.env.DATABASE_RETRY_DELAY || '1000', 10), // Reduced from 3000ms
     maxQueryExecutionTime: parseInt(process.env.DATABASE_MAX_QUERY_TIME || '2000', 10), // Reduced from 5000ms for faster timeouts
+    migrations: ['dist/shared/migrations/*.js'],
+    migrationsTableName: 'migrations',
+    migrationsRun: process.env.DATABASE_RUN_MIGRATIONS === 'true',
   };
 
   if (databaseType === 'sqlite') {

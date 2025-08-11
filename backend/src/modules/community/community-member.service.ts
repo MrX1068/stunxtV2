@@ -230,7 +230,7 @@ export class CommunityMemberService {
       search?: string;
       includeStats?: boolean;
     }
-  ): Promise<{ members: any[]; total: number }> {
+  ): Promise<{ members: any[]; total: number; page: number; limit: number; totalPages: number }> {
     const queryBuilder = this.memberRepository
       .createQueryBuilder('member')
       .leftJoinAndSelect('member.user', 'user')
@@ -264,7 +264,15 @@ export class CommunityMemberService {
       user: member.user ? plainToClass(SafeUserDto, member.user, { excludeExtraneousValues: true }) : null
     }));
 
-    return { members: safeMembers, total };
+    const totalPages = Math.ceil(total / limit);
+
+    return {
+      members: safeMembers,
+      total,
+      page,
+      limit,
+      totalPages
+    };
   }
 
   async getMemberStats(communityId: string): Promise<any> {

@@ -261,10 +261,13 @@ export class PostService {
     // Increment view count asynchronously
     this.incrementViewCount(postId);
 
-    // Cache the result
-    await this.cacheManager.set(cacheKey, post, 300); // 5 minutes
+    // Transform post to include user reaction state
+    const transformedPost = this.transformPostWithUserReaction(post, userId);
 
-    return post;
+    // Cache the result
+    await this.cacheManager.set(cacheKey, transformedPost, 300); // 5 minutes
+
+    return transformedPost;
   }
 
   // Get personalized feed with smart algorithm
@@ -352,7 +355,7 @@ export class PostService {
   }
 
   // Add reaction with optimistic updates
-  async addReaction(postId: string, userId: string, reactionType: ReactionType): Promise<PostReaction> {
+  async addReaction(postId: string, userId: string, reactionType: ReactionType): Promise<PostReaction | null> {
     const post = await this.postRepository.findOne({ where: { id: postId } });
     if (!post) {
       throw new NotFoundException('Post not found');
@@ -368,22 +371,56 @@ export class PostService {
     });
 
     if (existingReaction) {
-      // Update existing reaction
+      // If same reaction type, remove it (toggle behavior)
+      if (existingReaction.type === reactionType) {
+        await this.reactionRepository.remove(existingReaction);
+
+        // Update post like count
+        if (reactionType === ReactionType.LIKE) {
+          await this.postRepository.decrement({ id: postId }, 'likeCount', 1);
+        }
+
+        // Emit event for real-time updates
+        this.eventEmitter.emit('post.reaction.removed', {
+          postId,
+          userId,
+          reactionType,
+        });
+
+        // Clear post cache
+        await this.clearPostCache(postId);
+
+        return null; // Indicate reaction was removed
+      }
+
+      // Different reaction type - update existing reaction
+      const previousType = existingReaction.type;
       existingReaction.type = reactionType;
       existingReaction.metadata = {
         ...existingReaction.metadata,
-        previousReaction: existingReaction.type,
+        previousReaction: previousType,
       };
-      
+
       const updatedReaction = await this.reactionRepository.save(existingReaction);
-      
+
+      // Update like counts for both old and new reaction types
+      if (previousType === ReactionType.LIKE) {
+        await this.postRepository.decrement({ id: postId }, 'likeCount', 1);
+      }
+      if (reactionType === ReactionType.LIKE) {
+        await this.postRepository.increment({ id: postId }, 'likeCount', 1);
+      }
+
       // Emit event for real-time updates
       this.eventEmitter.emit('post.reaction.updated', {
         postId,
         userId,
         reactionType,
-        previousType: existingReaction.type,
+        previousType,
       });
+
+      // Clear post cache
+      await this.clearPostCache(postId);
 
       return updatedReaction;
     }
@@ -417,6 +454,41 @@ export class PostService {
     await this.clearPostCache(postId);
 
     return savedReaction;
+  }
+
+  // Remove reaction from post
+  async removeReaction(postId: string, userId: string, reactionType: ReactionType): Promise<void> {
+    const post = await this.postRepository.findOne({ where: { id: postId } });
+    if (!post) {
+      throw new NotFoundException('Post not found');
+    }
+
+    // Find existing reaction
+    const existingReaction = await this.reactionRepository.findOne({
+      where: { postId, userId, targetType: ReactionTarget.POST, type: reactionType },
+    });
+
+    if (!existingReaction) {
+      throw new NotFoundException('Reaction not found');
+    }
+
+    // Remove the reaction
+    await this.reactionRepository.remove(existingReaction);
+
+    // Update post like count
+    if (reactionType === ReactionType.LIKE) {
+      await this.postRepository.decrement({ id: postId }, 'likeCount', 1);
+    }
+
+    // Emit event for real-time updates
+    this.eventEmitter.emit('post.reaction.removed', {
+      postId,
+      userId,
+      reactionType,
+    });
+
+    // Clear post cache
+    await this.clearPostCache(postId);
   }
 
   // Add comment with threading support
@@ -795,6 +867,8 @@ export class PostService {
       .leftJoinAndSelect('post.author', 'author')
       .leftJoinAndSelect('post.space', 'space')
       .leftJoinAndSelect('post.media', 'media', 'media.status = :mediaStatus', { mediaStatus: 'ready' })
+      .leftJoinAndSelect('post.reactions', 'reactions')
+      .leftJoinAndSelect('reactions.user', 'reactionUser')
       .where('post.spaceId = :spaceId', { spaceId })
       .andWhere('post.status = :status', { status: PostStatus.PUBLISHED });
 
@@ -824,7 +898,11 @@ export class PostService {
     queryBuilder.skip(offset).take(limit);
 
     const [posts, total] = await queryBuilder.getManyAndCount();
-    return { posts, total };
+
+    // Transform posts to include user reaction state
+    const transformedPosts = posts.map(post => this.transformPostWithUserReaction(post, requestingUserId));
+
+    return { posts: transformedPosts, total };
   }
 
   // Get posts from users that the current user follows
@@ -992,6 +1070,26 @@ export class PostService {
     if (space.communityId) {
       await this.validateCommunityAccess(userId, space.communityId);
     }
+  }
+
+  /**
+   * Transform post to include user reaction state
+   */
+  private transformPostWithUserReaction(post: Post, userId?: string): any {
+    if (!userId || !post.reactions) {
+      return post;
+    }
+
+    // Find user's reaction for this post
+    const userReaction = post.reactions.find(
+      reaction => reaction.userId === userId && reaction.targetType === ReactionTarget.POST
+    );
+
+    // Add userReaction field to the post object
+    return {
+      ...post,
+      userReaction: userReaction?.type || null,
+    };
   }
 
   private async generateUniqueSlug(title: string): Promise<string> {

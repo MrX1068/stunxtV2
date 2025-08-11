@@ -13,6 +13,7 @@ import {
   ParseUUIDPipe,
   ValidationPipe,
   BadRequestException,
+  Logger
 } from '@nestjs/common';
 import {
   ApiTags,
@@ -177,6 +178,8 @@ class MarkAsReadDto {
 @Controller('messages')
 @UseGuards(JwtAuthGuard)
 export class MessageController {
+  private readonly logger = new Logger(MessageController.name);
+
   constructor(
     private readonly messageService: MessageService,
     private readonly eventEmitter: EventEmitter2,
@@ -255,6 +258,9 @@ export class MessageController {
     @Param('conversationId', ParseUUIDPipe) conversationId: string,
     @Query(ValidationPipe) query: GetMessagesQueryDto,
   ) {
+    this.logger.log(`📥 [REST API] User ${req.user.userId} requesting ${query.limit || 50} messages for conversation ${conversationId} (before: ${query.before}, after: ${query.after})`);
+
+    const startTime = Date.now();
     const result = await this.messageService.getMessages(
       conversationId,
       req.user.userId,
@@ -262,6 +268,9 @@ export class MessageController {
       query.before,
       query.after
     );
+    const fetchTime = Date.now() - startTime;
+
+    this.logger.log(`✅ [REST API] Successfully returned ${result.messages.length} messages to user ${req.user.userId} for conversation ${conversationId} in ${fetchTime}ms`);
 
     return {
       status: 'success',

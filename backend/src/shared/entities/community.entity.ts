@@ -15,6 +15,7 @@ import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { User } from './user.entity';
 import { CommunityMember } from './community-member.entity';
 import { Space } from './space.entity';
+import { CommunityJoinRequest } from './community-join-request.entity';
 
 export enum CommunityType {
   PUBLIC = 'public',
@@ -297,6 +298,11 @@ export class Community {
     cascade: true,
   })
   spaces: Space[];
+
+  @OneToMany(() => CommunityJoinRequest, (joinRequest) => joinRequest.community, {
+    cascade: true,
+  })
+  joinRequests: CommunityJoinRequest[];
 
   // Helper methods
   isActive(): boolean {

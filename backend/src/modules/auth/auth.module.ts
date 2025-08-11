@@ -4,11 +4,13 @@ import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
 
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { UserSessionService } from './user-session.service';
 import { LoginAttemptService } from './login-attempt.service';
+import { TokenBlacklistService } from './token-blacklist.service';
 import { OtpService } from './services/otp.service';
 import { EmailService } from './services/email.service';
 import { ResponseService } from '../../shared/services/response.service';
@@ -26,6 +28,7 @@ import { LoginAttempt } from '../../shared/entities/login-attempt.entity';
   imports: [
     TypeOrmModule.forFeature([User, UserSession, LoginAttempt]),
     PassportModule.register({ defaultStrategy: 'jwt' }),
+    ScheduleModule.forRoot(),
     JwtModule.registerAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -54,6 +57,7 @@ import { LoginAttempt } from '../../shared/entities/login-attempt.entity';
     AuthService,
     UserSessionService,
     LoginAttemptService,
+    TokenBlacklistService,
     OtpService,
     EmailService,
     ResponseService,
@@ -65,6 +69,7 @@ import { LoginAttempt } from '../../shared/entities/login-attempt.entity';
     AuthService,
     UserSessionService,
     LoginAttemptService,
+    TokenBlacklistService,
     OtpService,
     EmailService,
     JwtAuthGuard,

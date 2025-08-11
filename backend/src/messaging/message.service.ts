@@ -191,6 +191,9 @@ export class MessageService {
     message.sender = sender;
     message.conversation = conversation;
 
+    // Log sender information for debugging
+    console.log(`📝 [MessageService] Created message with sender: ${sender.fullName || sender.username} (${sender.id})`);
+
     return message;
   }
 
@@ -668,15 +671,25 @@ export class MessageService {
   private async getUserFromCache(userId: string): Promise<User> {
     const cacheKey = `user:${userId}`;
     let user = await this.cacheManager.get<User>(cacheKey);
-    
+
+    // 🔧 TEMP FIX: Clear corrupted cache if user data shows "User" as name
+    if (user && (user.fullName === 'User' || user.username === 'User')) {
+      console.log(`🧹 [MessageService] Clearing corrupted cache for user ${userId}`);
+      await this.cacheManager.del(cacheKey);
+      user = null; // Force fresh fetch from DB
+    }
+
     if (!user) {
       user = await this.userRepository.findOne({ where: { id: userId } });
       if (!user) {
         throw new NotFoundException('User not found');
       }
+      console.log(`👤 [MessageService] Fetched user from DB: ${user.fullName || user.username} (${user.id})`);
       await this.cacheManager.set(cacheKey, user, 300000); // 5 minutes
+    } else {
+      console.log(`💾 [MessageService] User from cache: ${user.fullName || user.username} (${user.id})`);
     }
-    
+
     return user;
   }
 
@@ -1438,5 +1451,12 @@ export class MessageService {
       messageId,
       deliveryStatus,
     };
+  }
+
+  // 🔧 TEMP DEBUG METHOD: Clear user cache
+  async clearUserCache(userId: string): Promise<void> {
+    const cacheKey = `user:${userId}`;
+    await this.cacheManager.del(cacheKey);
+    console.log(`🧹 [MessageService] Manually cleared cache for user ${userId}`);
   }
 }

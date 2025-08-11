@@ -274,12 +274,13 @@ export class CommunityResponseDto {
 }
 
 export class InviteUserDto {
-  @ApiProperty({
-    description: 'Email address to invite',
+  @ApiPropertyOptional({
+    description: 'Email address to invite (required for email invites, optional for link invites)',
     example: 'user@example.com'
   })
+  @IsOptional()
   @IsEmail()
-  email: string;
+  email?: string;
 
   @ApiPropertyOptional({
     description: 'Custom invitation message',
@@ -320,4 +321,28 @@ export class JoinCommunityDto {
   @IsOptional()
   @IsString()
   inviteCode?: string;
+}
+
+export class CreateJoinRequestDto {
+  @ApiPropertyOptional({
+    description: 'Message explaining why you want to join',
+    example: 'I am interested in this community and would like to contribute',
+    maxLength: 500
+  })
+  @IsOptional()
+  @IsString()
+  @Length(0, 500)
+  message?: string;
+}
+
+export class ProcessJoinRequestDto {
+  @ApiPropertyOptional({
+    description: 'Admin response message',
+    example: 'Welcome to the community!',
+    maxLength: 500
+  })
+  @IsOptional()
+  @IsString()
+  @Length(0, 500)
+  adminResponse?: string;
 }

@@ -122,7 +122,7 @@ export class EmailService {
    * Send account lockout notification
    */
   async sendAccountLockoutEmail(
-    email: string, 
+    email: string,
     fullName: string,
     lockoutUntil: Date,
     ipAddress: string,
@@ -130,7 +130,7 @@ export class EmailService {
   ): Promise<void> {
     const lockoutMinutes = Math.ceil((lockoutUntil.getTime() - Date.now()) / (1000 * 60));
     const template = this.getAccountLockoutTemplate(fullName, lockoutUntil, lockoutMinutes, ipAddress, userAgent);
-    
+
     await this.sendEmail({
       to: email,
       subject: template.subject,
@@ -138,7 +138,29 @@ export class EmailService {
       text: template.text,
     });
 
- 
+
+  }
+
+  /**
+   * Send community invite email
+   */
+  async sendCommunityInviteEmail(
+    email: string,
+    inviterName: string,
+    communityName: string,
+    inviteCode: string,
+    message?: string
+  ): Promise<void> {
+    const template = this.getCommunityInviteTemplate(inviterName, communityName, inviteCode, message);
+
+    await this.sendEmail({
+      to: email,
+      subject: template.subject,
+      html: template.html,
+      text: template.text,
+    });
+
+
   }
 
   /**
@@ -606,6 +628,123 @@ export class EmailService {
         </html>
       `,
       text: `Account Temporarily Locked - StunxtV2\n\nHello ${fullName},\n\nYour account has been temporarily locked due to multiple failed login attempts.\n\nLocked for: ${lockoutMinutes} minutes\nUnlock time: ${lockoutTime}\n\nSecurity Details:\n- IP Address: ${ipAddress}\n- Device: ${userAgent}\n- Lockout Duration: 30 minutes\n- Failed Attempts: 5 or more\n\nWhat you can do:\n- Wait: Your account will unlock automatically in ${lockoutMinutes} minutes\n- Reset Password: If you forgot your password, use the "Forgot Password" option\n- Check Security: If this wasn't you, someone may be trying to access your account\n- Contact Support: If you need immediate assistance\n\nSecurity Tips:\n- Use a strong, unique password\n- Enable two-factor authentication\n- Don't share your login credentials\n- Always log out from shared devices\n\nIf you didn't attempt to log in, please contact our security team immediately.\n\n© 2025 StunxtV2. All rights reserved.\nThis is an automated security notification.`
+    };
+  }
+
+  /**
+   * Community invite email template
+   */
+  private getCommunityInviteTemplate(
+    inviterName: string,
+    communityName: string,
+    inviteCode: string,
+    message?: string
+  ): EmailTemplate {
+    const inviteUrl = `${this.configService.get('frontend.url', 'https://app.stunxt.com')}/invite/${inviteCode}`;
+
+    return {
+      subject: `${inviterName} invited you to join ${communityName} on StunxtV2`,
+      html: `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Community Invitation</title>
+          <style>
+            body { font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 20px; }
+            .header { text-align: center; margin-bottom: 30px; }
+            .content { background: #f8fafc; padding: 30px; border-radius: 12px; margin-bottom: 20px; }
+            .invite-button {
+              background: #2563eb;
+              color: white;
+              padding: 15px 30px;
+              text-decoration: none;
+              border-radius: 8px;
+              display: inline-block;
+              font-weight: bold;
+              margin: 20px 0;
+            }
+            .footer {
+              margin-top: 30px;
+              padding-top: 20px;
+              border-top: 1px solid #e5e7eb;
+              text-align: center;
+              color: #6b7280;
+              font-size: 14px;
+            }
+            .community-info {
+              background: #eff6ff;
+              border: 1px solid #dbeafe;
+              border-radius: 8px;
+              padding: 20px;
+              margin: 20px 0;
+            }
+            .message-box {
+              background: #f0f9ff;
+              border-left: 4px solid #0ea5e9;
+              padding: 15px;
+              margin: 20px 0;
+              font-style: italic;
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <h1 style="color: #2563eb;">🎉 You're Invited!</h1>
+          </div>
+
+          <div class="content">
+            <h2>Hi there!</h2>
+            <p><strong>${inviterName}</strong> has invited you to join the <strong>${communityName}</strong> community on StunxtV2.</p>
+
+            ${message ? `
+              <div class="message-box">
+                <p><strong>Personal message from ${inviterName}:</strong></p>
+                <p>"${message}"</p>
+              </div>
+            ` : ''}
+
+            <div class="community-info">
+              <h3>🏘️ About ${communityName}</h3>
+              <p>Join this community to connect with like-minded people, share ideas, and participate in engaging discussions.</p>
+            </div>
+
+            <div style="text-align: center;">
+              <a href="${inviteUrl}" class="invite-button">
+                Join ${communityName}
+              </a>
+            </div>
+
+            <p><small>If the button doesn't work, copy and paste this link into your browser:</small></p>
+            <p><small><a href="${inviteUrl}">${inviteUrl}</a></small></p>
+
+            <p>Welcome to the StunxtV2 community! 🚀</p>
+          </div>
+
+          <div class="footer">
+            <p>© 2025 StunxtV2. All rights reserved.</p>
+            <p>This invitation was sent by ${inviterName}. If you don't want to receive invitations, you can ignore this email.</p>
+          </div>
+        </body>
+        </html>
+      `,
+      text: `
+        StunxtV2 - Community Invitation
+
+        Hi there!
+
+        ${inviterName} has invited you to join the ${communityName} community on StunxtV2.
+
+        ${message ? `Personal message from ${inviterName}: "${message}"` : ''}
+
+        To join the community, click this link or copy it into your browser:
+        ${inviteUrl}
+
+        Welcome to the StunxtV2 community!
+
+        © 2025 StunxtV2. All rights reserved.
+        This invitation was sent by ${inviterName}.
+      `
     };
   }
 }

@@ -1,12 +1,13 @@
 import { Injectable } from '@nestjs/common';
-import { 
-  StandardApiResponse, 
-  SuccessResponse, 
+import { Request } from 'express';
+import {
+  StandardApiResponse,
+  SuccessResponse,
   ErrorResponse,
   PaginatedResponse,
   PaginatedData,
   PaginationMetadata,
-  ResponseMetadata 
+  ResponseMetadata
 } from '../interfaces/api-response.interface';
 
 @Injectable()
@@ -16,20 +17,16 @@ export class ResponseService {
    * Create a success response
    */
   success<T>(
-    data: T, 
+    data: T,
     message?: string,
+    request?: Request,
     metadata?: Partial<ResponseMetadata>
   ): SuccessResponse<T> {
     return {
       success: true,
       data,
       message,
-      metadata: {
-        timestamp: new Date().toISOString(),
-        path: '',
-        method: '',
-        ...metadata,
-      },
+      metadata: this.createMetadata(request, metadata),
     };
   }
 
@@ -39,18 +36,14 @@ export class ResponseService {
   error(
     message: string,
     errors?: string[],
+    request?: Request,
     metadata?: Partial<ResponseMetadata>
   ): ErrorResponse {
     return {
       success: false,
       message,
       errors,
-      metadata: {
-        timestamp: new Date().toISOString(),
-        path: '',
-        method: '',
-        ...metadata,
-      },
+      metadata: this.createMetadata(request, metadata),
     };
   }
 
@@ -63,10 +56,11 @@ export class ResponseService {
     page: number,
     limit: number,
     message?: string,
+    request?: Request,
     metadata?: Partial<ResponseMetadata>
   ): PaginatedResponse<T> {
     const totalPages = Math.ceil(total / limit);
-    
+
     const pagination: PaginationMetadata = {
       page,
       limit,
@@ -85,29 +79,18 @@ export class ResponseService {
       success: true,
       data: paginatedData,
       message,
-      metadata: {
-        timestamp: new Date().toISOString(),
-        path: '',
-        method: '',
-        pagination,
-        ...metadata,
-      },
+      metadata: this.createMetadata(request, { pagination, ...metadata }),
     };
   }
 
   /**
    * Create a simple success response with no data
    */
-  ok(message?: string, metadata?: Partial<ResponseMetadata>): StandardApiResponse<void> {
+  ok(message?: string, request?: Request, metadata?: Partial<ResponseMetadata>): StandardApiResponse<void> {
     return {
       success: true,
       message,
-      metadata: {
-        timestamp: new Date().toISOString(),
-        path: '',
-        method: '',
-        ...metadata,
-      },
+      metadata: this.createMetadata(request, metadata),
     };
   }
 
@@ -137,7 +120,24 @@ export class ResponseService {
   extractPaginationParams(query: any): { page: number; limit: number } {
     const page = Math.max(1, parseInt(query.page) || 1);
     const limit = Math.max(1, Math.min(100, parseInt(query.limit) || 10));
-    
+
     return { page, limit };
+  }
+
+  /**
+   * Create response metadata with correlation ID
+   */
+  private createMetadata(request?: Request, metadata?: Partial<ResponseMetadata>): ResponseMetadata {
+    const correlationId = request ?
+      ((request as any).correlationId || request.headers['x-correlation-id'] as string) :
+      'unknown';
+
+    return {
+      timestamp: new Date().toISOString(),
+      path: request?.url || '',
+      method: request?.method || '',
+      correlationId,
+      ...metadata,
+    };
   }
 }

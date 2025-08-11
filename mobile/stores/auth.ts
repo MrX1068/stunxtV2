@@ -593,34 +593,55 @@ if (__DEV__) {
   });
 }
 
-// Auth hooks for common operations
+// Auth hooks for common operations (fixed to prevent infinite loops)
 export const useAuth = () => {
-  const authStore = useAuthStore();
+  // Use individual selectors to prevent infinite loops
+  const user = useAuthStore((state) => state.user);
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated);
+  const isLoading = useAuthStore((state) => state.isLoading);
+  const error = useAuthStore((state) => state.error);
+  const login = useAuthStore((state) => state.login);
+  const register = useAuthStore((state) => state.register);
+  const logout = useAuthStore((state) => state.logout);
+  const refreshAuth = useAuthStore((state) => state.refreshAuth);
+  const verifyEmail = useAuthStore((state) => state.verifyEmail);
+  const resendEmailVerification = useAuthStore((state) => state.resendEmailVerification);
+  const clearError = useAuthStore((state) => state.clearError);
+
   return {
-    user: authStore.user,
-    isAuthenticated: authStore.isAuthenticated,
-    isLoading: authStore.isLoading,
-    error: authStore.error,
-    login: authStore.login,
-    register: authStore.register,
-    logout: authStore.logout,
-    refreshAuth: authStore.refreshAuth,
-    verifyEmail: authStore.verifyEmail,
-    resendEmailVerification: authStore.resendEmailVerification,
-    clearError: authStore.clearError,
+    user,
+    isAuthenticated,
+    isLoading,
+    error,
+    login,
+    register,
+    logout,
+    refreshAuth,
+    verifyEmail,
+    resendEmailVerification,
+    clearError,
   };
 };
 
 export const useProfile = () => {
-  const authStore = useAuthStore();
+  // Use individual selectors to prevent infinite loops
+  const user = useAuthStore((state) => state.user);
+  const isLoading = useAuthStore((state) => state.isLoading);
+  const error = useAuthStore((state) => state.error);
+  const updateProfile = useAuthStore((state) => state.updateProfile);
+  const refreshUserData = useAuthStore((state) => state.refreshUserData);
+  const refreshUserDataIfStale = useAuthStore((state) => state.refreshUserDataIfStale);
+  const changePassword = useAuthStore((state) => state.changePassword);
+  const clearError = useAuthStore((state) => state.clearError);
+
   return {
-    user: authStore.user,
-    isLoading: authStore.isLoading,
-    error: authStore.error,
-    updateProfile: authStore.updateProfile,
-    refreshUserData: authStore.refreshUserData,
-    refreshUserDataIfStale: authStore.refreshUserDataIfStale,
-    changePassword: authStore.changePassword,
-    clearError: authStore.clearError,
+    user,
+    isLoading,
+    error,
+    updateProfile,
+    refreshUserData,
+    refreshUserDataIfStale,
+    changePassword,
+    clearError,
   };
 };

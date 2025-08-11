@@ -29,6 +29,7 @@ export class TransformInterceptor<T>
           path: request.url,
           method: request.method,
           requestId: request.headers['x-request-id'] || undefined,
+          correlationId: request.headers['x-correlation-id'] || request.headers['x-request-id'] || 'unknown',
           duration,
         };
 

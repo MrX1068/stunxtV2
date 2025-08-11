@@ -454,22 +454,40 @@ export const usePostsStore = create<PostsState>()(
       likePost: async (id: string) => {
         try {
           const apiStore = useApiStore.getState();
-          const response = await apiStore.post<ApiResponse>(`/posts/${id}/like`);
-          
+
+          // Use the correct reaction endpoint
+          const response = await apiStore.post<ApiResponse>(`/posts/${id}/reactions`, {
+            type: 'like'
+          });
+
           if (response.success) {
+            // Optimistic update - the backend handles like count increment
             set(state => ({
-              posts: state.posts.map(post => 
-                post.id === id 
+              posts: state.posts.map(post =>
+                post.id === id
                   ? { ...post, isLiked: true, likeCount: post.likeCount + 1 }
                   : post
               ),
-              currentPost: state.currentPost?.id === id 
+              currentPost: state.currentPost?.id === id
                 ? { ...state.currentPost, isLiked: true, likeCount: state.currentPost.likeCount + 1 }
                 : state.currentPost,
             }));
+
+            console.log(`✅ [PostStore] Successfully liked post: ${id}`);
           }
         } catch (error) {
-        
+          console.error(`❌ [PostStore] Failed to like post:`, error);
+          // Revert optimistic update on error
+          set(state => ({
+            posts: state.posts.map(post =>
+              post.id === id
+                ? { ...post, isLiked: false, likeCount: Math.max(0, post.likeCount - 1) }
+                : post
+            ),
+            currentPost: state.currentPost?.id === id
+              ? { ...state.currentPost, isLiked: false, likeCount: Math.max(0, state.currentPost.likeCount - 1) }
+              : state.currentPost,
+          }));
         }
       },
       
@@ -740,7 +758,7 @@ export const usePostsStore = create<PostsState>()(
       leaveCommunity: async (id: string) => {
         try {
           const apiStore = useApiStore.getState();
-          const response = await apiStore.delete<ApiResponse>(`/communities/${id}/join`);
+          const response = await apiStore.delete<ApiResponse>(`/communities/${id}/leave`);
           
           if (response.success) {
             set(state => ({
@@ -775,7 +793,7 @@ export const usePostsStore = create<PostsState>()(
           
           const response = await apiStore.get<ApiResponse<{ spaces: Space[] }>>(url);
        
-          
+          console.log("refresh test =>>>>>>>>>>>> ",response?.data?.spaces)
           if (response.success && response.data) {
             if (communityId) {
               set(state => ({

@@ -4,6 +4,8 @@ import { ConfigService } from '@nestjs/config';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { NestExpressApplication } from '@nestjs/platform-express';
 import { TransformInterceptor } from './shared/interceptors/transform.interceptor';
+import { GlobalExceptionFilter } from './shared/filters/global-exception.filter';
+import { CorrelationIdMiddleware } from './shared/middleware/correlation-id.middleware';
 
 import { AppModule } from './app.module';
 
@@ -18,6 +20,12 @@ async function bootstrap() {
   const configService = app.get(ConfigService);
   const port = configService.get<number>('app.port', 3000);
   const env = configService.get<string>('app.env', 'development');
+
+  // Global middleware for correlation IDs
+  // app.use(new CorrelationIdMiddleware().use);
+
+  // Global exception filter for standardized error handling
+  // app.useGlobalFilters(new GlobalExceptionFilter());
 
   // Global validation pipe
   app.useGlobalPipes(

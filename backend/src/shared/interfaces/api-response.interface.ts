@@ -13,6 +13,7 @@ export interface ResponseMetadata {
   method: string;
   pagination?: PaginationMetadata;
   requestId?: string;
+  correlationId: string;
   duration?: number;
 }
 

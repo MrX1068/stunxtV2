@@ -42,6 +42,15 @@ export default function TabLayout() {
             ),
           }}
         />
+        <Tabs.Screen
+          name="my-communities"
+          options={{
+            title: "My Communities",
+            tabBarIcon: ({ color, size }) => (
+              <TabIcon name="⭐" color={color} size={size} />
+            ),
+          }}
+        />
         {/* <Tabs.Screen
           name="messages"
           options={{

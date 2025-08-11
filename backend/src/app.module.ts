@@ -15,6 +15,7 @@ import { Community } from './shared/entities/community.entity';
 import { CommunityMember } from './shared/entities/community-member.entity';
 import { CommunityInvite } from './shared/entities/community-invite.entity';
 import { CommunityAuditLog } from './shared/entities/community-audit-log.entity';
+import { CommunityJoinRequest } from './shared/entities/community-join-request.entity';
 import { Space } from './shared/entities/space.entity';
 import { SpaceMember } from './shared/entities/space-member.entity';
 import { UserSession } from './shared/entities/user-session.entity';
@@ -22,6 +23,7 @@ import { LoginAttempt } from './shared/entities/login-attempt.entity';
 import { Conversation } from './shared/entities/conversation.entity';
 import { ConversationParticipant } from './shared/entities/conversation-participant.entity';
 import { Message } from './shared/entities/message.entity';
+import { MessageReaction } from './shared/entities/message-reaction.entity';
 import { Post } from './shared/entities/post.entity';
 import { PostComment } from './shared/entities/post-comment.entity';
 import { PostReaction } from './shared/entities/post-reaction.entity';
@@ -34,6 +36,7 @@ import { UserFollow } from './shared/entities/user-follow.entity';
 import { UserBlock } from './shared/entities/user-block.entity';
 
 // Module imports
+import { SharedModule } from './shared/shared.module';
 import { AuthModule } from './modules/auth/auth.module';
 import { CommunityModule } from './modules/community/community.module';
 import { SpaceModule } from './modules/space/space.module';
@@ -68,6 +71,7 @@ import { UserModule } from './modules/users/user.module';
             CommunityMember,
             CommunityInvite,
             CommunityAuditLog,
+            CommunityJoinRequest,
             Space,
             SpaceMember,
             UserSession,
@@ -75,6 +79,7 @@ import { UserModule } from './modules/users/user.module';
             Conversation,
             ConversationParticipant,
             Message,
+            MessageReaction,
             Post,
             PostComment,
             PostReaction,
@@ -109,6 +114,9 @@ import { UserModule } from './modules/users/user.module';
       }),
       inject: [ConfigService],
     }),
+
+    // Shared Module (Global)
+    SharedModule,
 
     // Feature Modules
     AuthModule,

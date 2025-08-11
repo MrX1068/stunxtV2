@@ -25,11 +25,15 @@ import { ConversationController } from './conversation.controller';
 // Gateway
 import { MessagingGateway } from './messaging.gateway';
 
-// Guards
+// Guards and Auth Module
 import { JwtAuthGuard } from '../modules/auth/guards/jwt-auth.guard';
+import { AuthModule } from '../modules/auth/auth.module';
 
 @Module({
   imports: [
+    // Auth module for TokenBlacklistService
+    AuthModule,
+
     // TypeORM entities
     TypeOrmModule.forFeature([
       Message,
@@ -89,12 +93,9 @@ import { JwtAuthGuard } from '../modules/auth/guards/jwt-auth.guard';
     // Core services
     MessageService,
     ConversationService,
-    
+
     // WebSocket gateway
     MessagingGateway,
-    
-    // Guards
-    JwtAuthGuard,
   ],
 
   exports: [

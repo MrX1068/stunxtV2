@@ -27,15 +27,16 @@ import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { ChangePasswordDto } from './dto/change-password.dto';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
-import { 
-  SendEmailVerificationDto, 
-  VerifyEmailDto, 
-  ResendVerificationDto 
+import {
+  SendEmailVerificationDto,
+  VerifyEmailDto,
+  ResendVerificationDto
 } from './dto/email-verification.dto';
 import { JwtAuthGuard } from './guards/jwt-auth.guard';
 import { LocalAuthGuard } from './guards/local-auth.guard';
 import { GetUser } from './decorators/get-user.decorator';
 import { Public } from './decorators/public.decorator';
+import { LoginRateLimit, ApiRateLimit } from '../../shared/guards/rate-limit.guard';
 import { User } from '../../shared/entities/user.entity';
 import { CheckEmailDto, CheckUsernameDto } from './dto/check-availability.dto';
 
@@ -50,6 +51,7 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Public()
+  @ApiRateLimit(true) // Strict rate limiting for registration
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({ summary: 'Register a new user' })
@@ -184,6 +186,7 @@ export class AuthController {
 
   @Public()
   @UseGuards(LocalAuthGuard)
+  @LoginRateLimit()
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login user' })

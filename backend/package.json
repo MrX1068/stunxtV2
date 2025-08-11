@@ -19,7 +19,9 @@
     "migration:generate": "npm run typeorm -- migration:generate",
     "migration:run": "npm run typeorm -- migration:run",
     "migration:revert": "npm run typeorm -- migration:revert",
-    "typeorm": "typeorm-ts-node-esm"
+    "typeorm": "typeorm-ts-node-esm",
+    "db:indexes": "node scripts/add-performance-indexes.js",
+    "db:indexes:sql": "psql $DATABASE_URL -f scripts/run-performance-indexes.sql"
   },
   "dependencies": {
     "@grpc/grpc-js": "^1.13.4",

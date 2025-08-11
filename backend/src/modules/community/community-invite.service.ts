@@ -7,6 +7,7 @@ import { User } from '../../shared/entities/user.entity';
 import { CommunityMember, CommunityMemberRole } from '../../shared/entities/community-member.entity';
 import { CommunityAuditService } from './community-audit.service';
 import { CommunityMemberService } from './community-member.service';
+import { EmailService } from '../auth/services/email.service';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -20,6 +21,7 @@ export class CommunityInviteService {
     private readonly userRepository: Repository<User>,
     private readonly auditService: CommunityAuditService,
     private readonly memberService: CommunityMemberService,
+    private readonly emailService: EmailService,
   ) {}
 
   async createInvite(
@@ -105,6 +107,33 @@ export class CommunityInviteService {
     });
 
     const savedInvite = await this.inviteRepository.save(invite) as CommunityInvite;
+
+    // Send email for email invites
+    if (options.type === CommunityInviteType.EMAIL && options.email) {
+      try {
+        // Get inviter information
+        const inviter = await this.userRepository.findOne({
+          where: { id: createdBy },
+          select: ['id', 'fullName', 'username'] // Must include primary key when using select
+        });
+
+        const inviterName = inviter?.fullName || inviter?.username || 'Someone';
+
+        // Send invite email
+        await this.emailService.sendCommunityInviteEmail(
+          options.email,
+          inviterName,
+          community.name,
+          savedInvite.code,
+          options.message
+        );
+
+        console.log(`✅ [CommunityInviteService] Sent invite email to ${options.email}`);
+      } catch (emailError) {
+        console.error('❌ [CommunityInviteService] Failed to send invite email:', emailError);
+        // Don't throw error - invite was created successfully, email is just a bonus
+      }
+    }
 
     // Log audit event
     await this.auditService.logInviteCreated(
@@ -251,15 +280,21 @@ export class CommunityInviteService {
       status?: CommunityInviteStatus;
       type?: CommunityInviteType;
       createdBy?: string;
+      includeRevoked?: boolean; // New option to include revoked invites
     }
   ): Promise<{ invites: CommunityInvite[]; total: number }> {
     const queryBuilder = this.inviteRepository
       .createQueryBuilder('invite')
-      .leftJoinAndSelect('invite.creator', 'creator')
+      .leftJoinAndSelect('invite.inviter', 'inviter')
       .where('invite.communityId = :communityId', { communityId });
 
     if (options?.status) {
       queryBuilder.andWhere('invite.status = :status', { status: options.status });
+    } else if (!options?.includeRevoked) {
+      // By default, exclude revoked invites unless explicitly requested
+      queryBuilder.andWhere('invite.status != :revokedStatus', {
+        revokedStatus: CommunityInviteStatus.REVOKED
+      });
     }
 
     if (options?.type) {
@@ -281,6 +316,23 @@ export class CommunityInviteService {
     const [invites, total] = await queryBuilder.getManyAndCount();
 
     return { invites, total };
+  }
+
+  /**
+   * Get revoked invites for a community (for transparency)
+   */
+  async getRevokedInvites(
+    communityId: string,
+    options?: {
+      page?: number;
+      limit?: number;
+    }
+  ): Promise<{ invites: CommunityInvite[]; total: number }> {
+    return this.getCommunityInvites(communityId, {
+      ...options,
+      status: CommunityInviteStatus.REVOKED,
+      includeRevoked: true,
+    });
   }
 
   async getUserInvites(

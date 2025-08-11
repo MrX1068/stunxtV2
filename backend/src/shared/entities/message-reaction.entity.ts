@@ -24,19 +24,18 @@ export class MessageReaction {
 
   @ApiProperty({ description: 'Message ID' })
   @Column({ name: 'message_id' })
-  @Index()
+ 
   messageId!: string;
 
   @ApiProperty({ description: 'User ID who reacted' })
   @Column({ name: 'user_id' })
-  @Index()
   userId!: string;
 
   @ApiProperty({ description: 'Emoji reaction' })
   @Column({ length: 10 })
   @IsNotEmpty({ message: 'Emoji is required' })
   @Length(1, 10, { message: 'Emoji must be between 1 and 10 characters' })
-  @Index()
+  
   emoji!: string;
 
   @ApiProperty({ description: 'Reaction metadata' })
@@ -45,7 +44,7 @@ export class MessageReaction {
 
   @ApiProperty({ description: 'Reaction creation timestamp' })
   @CreateDateColumn({ name: 'created_at' })
-  @Index()
+
   createdAt!: Date;
 
   // Relationships

@@ -360,4 +360,80 @@ export class CommunityAuditService {
 
     return stats;
   }
+
+  async logJoinRequestCreated(
+    communityId: string,
+    userId: string,
+    message?: string,
+  ): Promise<void> {
+    const auditLog = this.auditRepository.create({
+      communityId,
+      action: 'JOIN_REQUEST_CREATED' as any,
+      severity: CommunityAuditSeverity.LOW,
+      targetId: userId,
+      targetType: 'user',
+      description: 'User submitted a join request',
+      performedBy: userId,
+      data: { message },
+    });
+
+    await this.auditRepository.save(auditLog);
+  }
+
+  async logJoinRequestApproved(
+    communityId: string,
+    userId: string,
+    approvedBy: string,
+    adminResponse?: string,
+  ): Promise<void> {
+    const auditLog = this.auditRepository.create({
+      communityId,
+      action: 'JOIN_REQUEST_APPROVED' as any,
+      severity: CommunityAuditSeverity.MEDIUM,
+      targetId: userId,
+      targetType: 'user',
+      description: 'Join request was approved',
+      performedBy: approvedBy,
+      data: { adminResponse },
+    });
+
+    await this.auditRepository.save(auditLog);
+  }
+
+  async logJoinRequestRejected(
+    communityId: string,
+    userId: string,
+    rejectedBy: string,
+    adminResponse?: string,
+  ): Promise<void> {
+    const auditLog = this.auditRepository.create({
+      communityId,
+      action: 'JOIN_REQUEST_REJECTED' as any,
+      severity: CommunityAuditSeverity.MEDIUM,
+      targetId: userId,
+      targetType: 'user',
+      description: 'Join request was rejected',
+      performedBy: rejectedBy,
+      data: { adminResponse },
+    });
+
+    await this.auditRepository.save(auditLog);
+  }
+
+  async logJoinRequestCancelled(
+    communityId: string,
+    userId: string,
+  ): Promise<void> {
+    const auditLog = this.auditRepository.create({
+      communityId,
+      action: 'JOIN_REQUEST_CANCELLED' as any,
+      severity: CommunityAuditSeverity.LOW,
+      targetId: userId,
+      targetType: 'user',
+      description: 'User cancelled their join request',
+      performedBy: userId,
+    });
+
+    await this.auditRepository.save(auditLog);
+  }
 }

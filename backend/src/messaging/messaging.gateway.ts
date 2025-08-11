@@ -57,6 +57,8 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
   private connectedUsers = new Map<string, Set<string>>(); // userId -> Set of socketIds
   private userRooms = new Map<string, Set<string>>(); // socketId -> Set of conversationIds
   private typingUsers = new Map<string, Set<string>>(); // conversationId -> Set of userIds
+  private typingTimeouts = new Map<string, NodeJS.Timeout>(); // userId:conversationId -> timeout
+  private connectionCleanupInterval: NodeJS.Timeout;
 
   constructor(
     private jwtService: JwtService,
@@ -64,7 +66,12 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
     private conversationService: ConversationService,
     private eventEmitter: EventEmitter2,
     @Inject(CACHE_MANAGER) private cacheManager: Cache,
-  ) {}
+  ) {
+    // Set up periodic cleanup for stale connections
+    this.connectionCleanupInterval = setInterval(() => {
+      this.performPeriodicCleanup();
+    }, 300000); // Every 5 minutes
+  }
 
   afterInit(server: Server) {
     this.logger.log('🚀 WebSocket Gateway initialized on /messaging namespace');
@@ -314,6 +321,68 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
     }
   }
 
+  @SubscribeMessage('get_messages')
+  async handleGetMessages(
+    @ConnectedSocket() client: AuthenticatedSocket,
+    @MessageBody() data: {
+      conversationId: string;
+      limit?: number;
+      before?: string;
+      after?: string;
+    },
+  ) {
+    try {
+      const { conversationId, limit = 50, before, after } = data;
+
+      this.logger.log(`📥 [WebSocket] User ${client.userId} requesting ${limit} messages for conversation ${conversationId} (before: ${before}, after: ${after})`);
+
+      // Verify user has access to conversation
+      this.logger.log(`🔐 [WebSocket] Checking access for user ${client.userId} to conversation ${conversationId}`);
+      const hasAccess = await this.conversationService.hasUserAccess(conversationId, client.userId);
+      if (!hasAccess) {
+        this.logger.warn(`❌ [WebSocket] Access denied for user ${client.userId} to conversation ${conversationId}`);
+        client.emit('get_messages_error', {
+          error: 'Access denied to conversation',
+          conversationId
+        });
+        return;
+      }
+      this.logger.log(`✅ [WebSocket] Access granted for user ${client.userId} to conversation ${conversationId}`);
+
+      // Fetch messages with pagination
+      this.logger.log(`🔍 [WebSocket] Fetching messages from MessageService for conversation ${conversationId}`);
+      const startTime = Date.now();
+      const result = await this.messageService.getMessages(
+        conversationId,
+        client.userId,
+        Math.min(limit, 100), // Cap at 100 messages per request
+        before,
+        after
+      );
+      const fetchTime = Date.now() - startTime;
+
+      this.logger.log(`⚡ [WebSocket] MessageService returned ${result.messages.length} messages in ${fetchTime}ms`);
+
+      // Emit messages back to client
+      client.emit('messages_loaded', {
+        conversationId,
+        messages: result.messages,
+        hasMore: result.hasMore,
+        cursor: result.messages.length > 0 ? result.messages[result.messages.length - 1].id : null,
+        total: result.totalCount,
+      });
+
+      this.logger.log(`✅ [WebSocket] Successfully sent ${result.messages.length} messages to user ${client.userId} for conversation ${conversationId}`);
+
+    } catch (error) {
+      this.logger.error(`❌ [WebSocket] Get messages error for conversation ${data.conversationId}: ${error.message}`, error.stack);
+      client.emit('get_messages_error', {
+        error: 'Failed to fetch messages',
+        conversationId: data.conversationId
+      });
+    }
+  }
+
   @SubscribeMessage('send_message')
   async handleSendMessage(
     @ConnectedSocket() client: AuthenticatedSocket,
@@ -363,21 +432,23 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
         data.optimisticId
       );
 
-      // ✅ CRITICAL FIX: Enhance message with complete user data for frontend
-      const enhancedMessage = await this.enhanceMessageWithUserData(result.message);
+      // ✅ OPTIMAL FIX: MessageService already provides correct user data, no need to enhance
+      // The result.message already contains the correct sender information from getUserFromCache()
+
+      this.logger.log(`✅ [Gateway] Message created with sender: ${result.message.sender?.fullName || result.message.sender?.username || 'Unknown'}`);
 
       // Emit immediate confirmation back to sender
       client.emit('message_sent', {
         optimisticId: data.optimisticId,
-        message: enhancedMessage,
+        message: result.message,
         success: true,
         timestamp: new Date().toISOString(),
       });
 
-      // Broadcast to conversation participants with enhanced message
+      // Broadcast to conversation participants with correct message data
       const roomName = `conversation:${data.conversationId}`;
       const broadcastData = {
-        message: enhancedMessage,
+        message: result.message,
         conversationId: data.conversationId,
         timestamp: new Date().toISOString(),
       };
@@ -620,6 +691,75 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
         this.stopUserTyping(conversationId, userId);
       }
     }
+
+    // Clear any pending typing timeouts for this user
+    for (const [key, timeout] of this.typingTimeouts.entries()) {
+      if (key.startsWith(`${userId}:`)) {
+        clearTimeout(timeout);
+        this.typingTimeouts.delete(key);
+      }
+    }
+  }
+
+  /**
+   * Periodic cleanup for stale connections and data
+   */
+  private performPeriodicCleanup(): void {
+    try {
+      this.logger.debug('Performing periodic cleanup...');
+
+      // Clean up stale typing indicators (older than 30 seconds)
+      const now = Date.now();
+      const staleThreshold = 30000; // 30 seconds
+
+      for (const [key, timeout] of this.typingTimeouts.entries()) {
+        // If timeout is very old, clear it
+        if (now - timeout['_idleStart'] > staleThreshold) {
+          clearTimeout(timeout);
+          this.typingTimeouts.delete(key);
+
+          // Extract userId and conversationId from key
+          const [userId, conversationId] = key.split(':');
+          if (userId && conversationId) {
+            this.stopUserTyping(conversationId, userId);
+          }
+        }
+      }
+
+      // Clean up empty sets in maps
+      for (const [userId, socketSet] of this.connectedUsers.entries()) {
+        if (socketSet.size === 0) {
+          this.connectedUsers.delete(userId);
+        }
+      }
+
+      for (const [conversationId, typingSet] of this.typingUsers.entries()) {
+        if (typingSet.size === 0) {
+          this.typingUsers.delete(conversationId);
+        }
+      }
+
+      this.logger.debug(`Cleanup completed. Active connections: ${this.connectedUsers.size}, Active typing: ${this.typingUsers.size}`);
+    } catch (error) {
+      this.logger.error('Error during periodic cleanup:', error);
+    }
+  }
+
+  /**
+   * Cleanup on gateway shutdown
+   */
+  onModuleDestroy() {
+    if (this.connectionCleanupInterval) {
+      clearInterval(this.connectionCleanupInterval);
+    }
+
+    // Clear all typing timeouts
+    for (const timeout of this.typingTimeouts.values()) {
+      clearTimeout(timeout);
+    }
+    this.typingTimeouts.clear();
+
+    this.logger.log('MessagingGateway cleanup completed');
   }
 
   private async autoJoinUserConversations(client: AuthenticatedSocket) {
@@ -730,7 +870,7 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
         return {
           ...message,
           senderId: message.senderId || message.sender.id,
-          senderName: message.sender.username || message.sender.fullName || message.sender.displayName || 'User',
+          senderName: message.sender.fullName || message.sender.username || 'User',
           senderAvatar: message.sender.avatarUrl || message.sender.avatar || null,
         };
       }
@@ -740,7 +880,7 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
         const user = await this.getUserFromCache(message.senderId);
         return {
           ...message,
-          senderName: user.username || user.fullName || user.displayName || 'User',
+          senderName: user.fullName || user.username || 'User',
           senderAvatar: user.avatarUrl || user.avatar || null,
         };
       }
@@ -753,23 +893,24 @@ export class MessagingGateway implements OnGatewayInit, OnGatewayConnection, OnG
     }
   }
 
-  // ✅ Helper method to get user from cache (similar to MessageService)
+  // ✅ Helper method to get user from cache (simplified version)
   private async getUserFromCache(userId: string): Promise<any> {
     const cacheKey = `user:${userId}`;
     let user = await this.cacheManager.get<any>(cacheKey);
-    
+
     if (!user) {
-      // In a real implementation, you'd inject UserService or Repository
-      // For now, we'll return basic user info
+      // For now, return basic user info
+      // TODO: Integrate with UserService when circular dependency is resolved
       user = {
         id: userId,
         username: 'User',
         fullName: 'User',
         avatarUrl: null,
       };
-      await this.cacheManager.set(cacheKey, user, 300000); // 5 minutes
+      // Cache for 5 minutes
+      await this.cacheManager.set(cacheKey, user, 300000);
     }
-    
+
     return user;
   }
 }

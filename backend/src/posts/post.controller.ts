@@ -513,11 +513,37 @@ export class PostController {
       req.user.id,
       addReactionDto.type,
     );
-    
+
     return {
       success: true,
       data: reaction,
-      message: 'Reaction added successfully',
+      message: reaction ? 'Reaction added successfully' : 'Reaction removed successfully',
+    };
+  }
+
+  @Delete(':id/reactions/:type')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Remove reaction from a post' })
+  @ApiParam({ name: 'id', description: 'Post UUID' })
+  @ApiParam({ name: 'type', description: 'Reaction type to remove' })
+  @ApiResponse({ status: 200, description: 'Reaction removed successfully' })
+  @ApiResponse({ status: 404, description: 'Post or reaction not found' })
+  async removeReaction(
+    @Param('id', ParseUUIDPipe) postId: string,
+    @Param('type') reactionType: ReactionType,
+    @Request() req: any,
+  ) {
+    await this.postService.removeReaction(
+      postId,
+      req.user.id,
+      reactionType,
+    );
+
+    return {
+      success: true,
+      message: 'Reaction removed successfully',
     };
   }
 

@@ -25,15 +25,19 @@ import { CommunityService } from './community.service';
 import { CommunityMemberService } from './community-member.service';
 import { CommunityInviteService } from './community-invite.service';
 import { CommunityAuditService } from './community-audit.service';
-import { 
-  CreateCommunityDto, 
-  UpdateCommunityDto, 
+import { CommunityJoinRequestService } from './community-join-request.service';
+import {
+  CreateCommunityDto,
+  UpdateCommunityDto,
   CommunityQueryDto,
   InviteUserDto,
-  JoinCommunityDto 
+  JoinCommunityDto,
+  CreateJoinRequestDto,
+  ProcessJoinRequestDto
 } from './dto/community.dto';
 import { CommunityMemberRole } from '../../shared/entities/community-member.entity';
 import { CommunityInviteType } from '../../shared/entities/community-invite.entity';
+import { BadRequestException } from '@nestjs/common/exceptions';
 
 @ApiTags('Communities')
 @Controller('communities')
@@ -45,6 +49,7 @@ export class CommunityController {
     private readonly memberService: CommunityMemberService,
     private readonly inviteService: CommunityInviteService,
     private readonly auditService: CommunityAuditService,
+    private readonly joinRequestService: CommunityJoinRequestService,
   ) {}
 
   @Post()
@@ -177,12 +182,52 @@ export class CommunityController {
     @Request() req: any,
   ) {
     if (joinDto.inviteCode) {
-      // Join via invite
+      // Join via invite (for private communities)
       return this.inviteService.acceptInvite(joinDto.inviteCode, req.user.id);
     } else {
-      // Direct join
-      return this.memberService.addMember(id, req.user.id);
+      // Direct join (only for public communities)
+      const community = await this.communityService.findOne(id);
+
+      if (community.type === 'public') {
+        return this.memberService.addMember(id, req.user.id, undefined, undefined, 'direct_join');
+      } else if (community.type === 'secret') {
+        // For secret communities, create a join request instead
+        return this.joinRequestService.createJoinRequest(id, req.user.id, joinDto.message);
+      } else {
+        throw new BadRequestException('Private communities require an invite code to join');
+      }
     }
+  }
+
+  @Delete(':id/leave')
+  @ApiOperation({ summary: 'Leave community' })
+  @ApiParam({ name: 'id', description: 'Community ID' })
+  @ApiResponse({ status: 200, description: 'Successfully left community' })
+  @ApiResponse({ status: 400, description: 'Not a member or cannot leave' })
+  @ApiResponse({ status: 404, description: 'Community not found' })
+  async leaveCommunity(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: any,
+  ) {
+    // Check if user is a member
+    const member = await this.memberService.getMember(id, req.user.id);
+
+    if (!member) {
+      throw new BadRequestException('You are not a member of this community');
+    }
+
+    // Owners cannot leave unless they transfer ownership first
+    if (member.role === CommunityMemberRole.OWNER) {
+      throw new BadRequestException('Community owners cannot leave. Please transfer ownership first.');
+    }
+
+    // Remove the member (this will handle audit logging)
+    await this.memberService.removeMember(id, req.user.id, req.user.id, 'User left community');
+
+    return {
+      success: true,
+      message: 'Successfully left community'
+    };
   }
 
   @Delete(':id/members/:userId')
@@ -329,6 +374,24 @@ export class CommunityController {
     }
 
     return this.inviteService.getCommunityInvites(id, {
+      page: page ? parseInt(page.toString()) : 1,
+      limit: limit ? parseInt(limit.toString()) : 20,
+    });
+  }
+
+  @Get(':id/invites/revoked')
+  @ApiOperation({ summary: 'Get revoked community invites' })
+  @ApiParam({ name: 'id', description: 'Community ID' })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
+  @ApiResponse({ status: 200, description: 'Revoked invites retrieved successfully' })
+  async getRevokedInvites(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Request() req?: any,
+  ) {
+    return this.inviteService.getRevokedInvites(id, {
       page: page ? parseInt(page.toString()) : 1,
       limit: limit ? parseInt(limit.toString()) : 20,
     });
@@ -497,6 +560,96 @@ export class CommunityController {
     return this.memberService.getUserJoinedCommunities(req.user.id, {
       page: page ? parseInt(page.toString()) : 1,
       limit: limit ? parseInt(limit.toString()) : 20,
+    });
+  }
+
+  // Join Request Management Endpoints
+  @Post(':id/join-requests')
+  @ApiOperation({ summary: 'Create join request for secret community' })
+  @ApiParam({ name: 'id', description: 'Community ID' })
+  @ApiResponse({ status: 201, description: 'Join request created successfully' })
+  @ApiResponse({ status: 400, description: 'Invalid request or already exists' })
+  async createJoinRequest(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() createJoinRequestDto: CreateJoinRequestDto,
+    @Request() req: any,
+  ) {
+    return this.joinRequestService.createJoinRequest(
+      id,
+      req.user.id,
+      createJoinRequestDto.message
+    );
+  }
+
+  @Get(':id/join-requests')
+  @ApiOperation({ summary: 'Get pending join requests (admin/moderator only)' })
+  @ApiParam({ name: 'id', description: 'Community ID' })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
+  @ApiResponse({ status: 200, description: 'Join requests retrieved successfully' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  async getPendingJoinRequests(
+    @Param('id', ParseUUIDPipe) id: string,
+    @Request() req: any,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+  ) {
+    return this.joinRequestService.getPendingRequests(id, req.user.id, {
+      page: page ? parseInt(page.toString()) : 1,
+      limit: limit ? parseInt(limit.toString()) : 20,
+    });
+  }
+
+  @Post('join-requests/:requestId/approve')
+  @ApiOperation({ summary: 'Approve join request' })
+  @ApiParam({ name: 'requestId', description: 'Join request ID' })
+  @ApiResponse({ status: 200, description: 'Join request approved successfully' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  async approveJoinRequest(
+    @Param('requestId', ParseUUIDPipe) requestId: string,
+    @Body() processDto: ProcessJoinRequestDto,
+    @Request() req: any,
+  ) {
+    return this.joinRequestService.approveRequest(
+      requestId,
+      req.user.id,
+      processDto.adminResponse
+    );
+  }
+
+  @Post('join-requests/:requestId/reject')
+  @ApiOperation({ summary: 'Reject join request' })
+  @ApiParam({ name: 'requestId', description: 'Join request ID' })
+  @ApiResponse({ status: 200, description: 'Join request rejected successfully' })
+  @ApiResponse({ status: 403, description: 'Insufficient permissions' })
+  async rejectJoinRequest(
+    @Param('requestId', ParseUUIDPipe) requestId: string,
+    @Body() processDto: ProcessJoinRequestDto,
+    @Request() req: any,
+  ) {
+    return this.joinRequestService.rejectRequest(
+      requestId,
+      req.user.id,
+      processDto.adminResponse
+    );
+  }
+
+  @Get('me/join-requests')
+  @ApiOperation({ summary: 'Get user\'s join requests' })
+  @ApiQuery({ name: 'page', required: false, description: 'Page number' })
+  @ApiQuery({ name: 'limit', required: false, description: 'Items per page' })
+  @ApiQuery({ name: 'status', required: false, description: 'Filter by status' })
+  @ApiResponse({ status: 200, description: 'Join requests retrieved successfully' })
+  async getUserJoinRequests(
+    @Request() req: any,
+    @Query('page') page?: number,
+    @Query('limit') limit?: number,
+    @Query('status') status?: string,
+  ) {
+    return this.joinRequestService.getUserRequests(req.user.id, {
+      page: page ? parseInt(page.toString()) : 1,
+      limit: limit ? parseInt(limit.toString()) : 20,
+      status: status as any,
     });
   }
 
